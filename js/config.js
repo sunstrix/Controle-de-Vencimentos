@@ -2,21 +2,10 @@
  * Controle de Vencimentos CP FANI - Configuração
  * 
  * Este arquivo contém as constantes de configuração do sistema.
- * ATENÇÃO: Substitua a URL abaixo pela URL do seu Web App do Google Apps Script
- * após publicar o Code.gs.
  */
 
-// URL do Google Apps Script Web App (substitua após publicação)
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/SUA_URL_AQUI/exec";
-
-// Validação: alerta no console se a URL não foi configurada
-if (APPS_SCRIPT_URL.includes("SUA_URL_AQUI")) {
-  console.warn(
-    "%c⚠️ ATENÇÃO: URL do Apps Script não configurada!",
-    "color: orange; font-weight: bold;",
-    "\nEdite o arquivo js/config.js e substitua 'SUA_URL_AQUI' pela URL real do seu Web App."
-  );
-}
+// URL do Google Apps Script Web App
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzKATLnYSbBoc1Ndf8VoOjWrqYTCejCbwhz-sIuMxwDhawVIwlR21l5q_sb8qmT-6qiSg/exec";
 
 // Configurações adicionais
 const CONFIG = {

@@ -20,16 +20,19 @@ function doGet(e) {
       return sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
     }
 
-    // 1. Carregar Lojas (Coluna A)
+    // 1. Carregar Lojas (Coluna A) e remover duplicatas/vazios
     var lojasRaw = getSheetData(sheetLojas, 1);
-    var lojas = lojasRaw.map(function(row) { return row[0]; }).filter(function(val) { return val !== ""; });
+    var lojas = [...new Set(lojasRaw.map(function(row) { return String(row[0]).trim(); }).filter(function(val) { return val !== ""; }))];
 
-    // 2. Carregar Projetos (Coluna A: código, Coluna B: descrição)
+    // 2. Carregar Projetos (Coluna A: código, Coluna B: descrição) com deduplicação
     var projetosRaw = getSheetData(sheetProjetos, 2);
     var projetos = {};
     projetosRaw.forEach(function(row) {
-      if (row[0] !== "") {
-        projetos[String(row[0]).trim()] = row[1];
+      var codigo = String(row[0]).trim();
+      var descricao = String(row[1]).trim();
+      // Se o código já existir, mantém o primeiro encontrado (ou sobrescreve, tanto faz para o PROCV)
+      if (codigo !== "" && !projetos.hasOwnProperty(codigo)) {
+        projetos[codigo] = descricao;
       }
     });
 
@@ -37,12 +40,12 @@ function doGet(e) {
     var registrosRaw = getSheetData(sheetRegistros, 6);
     var registros = registrosRaw.map(function(row) {
       return {
-        data_registro: row[0],
-        loja: row[1],
-        codigo_projeto: String(row[2]).trim(),
-        descricao_projeto: row[3],
-        quantidade: Number(row[4]),
-        mes_vencimento: row[5]
+        data_registro: row[0] ? String(row[0]) : "",
+        loja: row[1] ? String(row[1]) : "",
+        codigo_projeto: row[2] ? String(row[2]).trim() : "",
+        descricao_projeto: row[3] ? String(row[3]) : "Código não cadastrado",
+        quantidade: Number(row[4]) || 0,
+        mes_vencimento: row[5] ? String(row[5]) : ""
       };
     }).filter(function(r) { return r.codigo_projeto !== ""; });
 

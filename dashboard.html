@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Dashboard de controle de vencimentos - CP FANI" />
+  <title>Dashboard de Vencimentos | CP FANI</title>
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets/logo-cp-fani.png" />
+  <link rel="apple-touch-icon" href="assets/logo-cp-fani.png" />
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- SheetJS para exportação Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+  <!-- Cabeçalho -->
+  <header class="header">
+    <div class="header-container">
+      <div class="logo-wrapper">
+        <img
+          src="assets/logo-cp-fani.png"
+          alt="Logo CP FANI"
+          class="logo"
+          onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
+        />
+        <span id="logo-fallback" class="logo-fallback" style="display:none;">CP FANI</span>
+      </div>
+      <h1 class="header-title">Dashboard de Vencimentos</h1>
+      <a href="index.html" class="btn btn-secondary" style="margin-left: auto; text-decoration: none;">Voltar ao Formulário</a>
+    </div>
+  </header>
+
+  <!-- Conteúdo principal -->
+  <main class="main">
+    <!-- Estado de Carregamento -->
+    <div id="loading-state" class="estado-carregando">
+      <div class="spinner-grande"></div>
+      <p>Carregando dados dos vencimentos...</p>
+    </div>
+
+    <!-- Conteúdo do Dashboard (oculto até carregar) -->
+    <div id="dashboard-content" style="display: none;">
+      
+      <!-- Cartões de Resumo -->
+      <section class="dashboard-resumo">
+        <div class="cartao-resumo destaque-atual">
+          <div class="cartao-titulo">Vencendo este mês</div>
+          <div class="cartao-valor" id="summary-current">0</div>
+        </div>
+        <div class="cartao-resumo destaque-seguinte">
+          <div class="cartao-titulo">Vencendo no próximo mês</div>
+          <div class="cartao-valor" id="summary-next">0</div>
+        </div>
+        <div class="cartao-resumo destaque-lojas">
+          <div class="cartao-titulo">Lojas com pendências</div>
+          <div class="cartao-valor" id="summary-stores">0</div>
+        </div>
+      </section>
+
+      <!-- Filtros e Ações -->
+      <section class="dashboard-filtros">
+        <div class="filtro-grupo">
+          <label for="filter-store">Filtrar por Loja</label>
+          <select id="filter-store">
+            <option value="">Todas as lojas</option>
+          </select>
+        </div>
+        <div class="filtro-grupo">
+          <label for="filter-month">Filtrar por Mês</label>
+          <input type="month" id="filter-month" />
+        </div>
+        <div class="acoes-dashboard">
+          <button id="btn-update" class="btn btn-secondary">Atualizar Dados</button>
+          <button id="btn-export" class="btn btn-primary">Exportar para Excel</button>
+        </div>
+      </section>
+
+      <!-- Tabela de Dados -->
+      <section class="dashboard-tabela-container">
+        <table class="dashboard-tabela" id="data-table">
+          <thead>
+            <tr>
+              <th>Loja</th>
+              <th>Código</th>
+              <th>Descrição</th>
+              <th>Quantidade</th>
+              <th>Mês de Vencimento</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Linhas preenchidas via JS -->
+          </tbody>
+        </table>
+        <div id="empty-state" class="estado-vazio" style="display: none;">
+          Nenhum vencimento encontrado para os filtros selecionados.
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Rodapé -->
+  <footer class="footer">
+    <p class="footer-text">
+      &copy; <span id="ano-atual"></span> CP FANI - Controle de Vencimentos
+    </p>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/config.js"></script>
+  <script src="js/dashboard.js"></script>
+</body>
+</html>
