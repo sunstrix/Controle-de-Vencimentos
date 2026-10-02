@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Sistema de controle de vencimentos - CP FANI" />
+  <title>Registro de Vencimentos | CP FANI</title>
+
+  <!-- Favicon: logo da CP FANI -->
+  <link rel="icon" type="image/png" href="assets/logo-cp-fani.png" />
+  <link rel="apple-touch-icon" href="assets/logo-cp-fani.png" />
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Cabeçalho -->
+  <header class="header">
+    <div class="header-container">
+      <div class="logo-wrapper">
+        <img
+          src="assets/logo-cp-fani.png"
+          alt="Logo CP FANI"
+          class="logo"
+          onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
+        />
+        <span id="logo-fallback" class="logo-fallback" style="display:none;">CP FANI</span>
+      </div>
+      <h1 class="header-title">Controle de Vencimentos</h1>
+    </div>
+  </header>
+
+  <!-- Conteúdo principal -->
+  <main class="main">
+    <section class="form-section">
+      <h2 class="section-title">Novo Registro</h2>
+      <p class="section-subtitle">Preencha os dados abaixo para registrar um vencimento.</p>
+
+      <form id="form-vencimento" class="form" novalidate>
+        <!-- Loja -->
+        <div class="form-group">
+          <label for="loja" class="form-label">Loja *</label>
+          <select id="loja" name="loja" class="form-select" required>
+            <option value="">Carregando lojas...</option>
+          </select>
+        </div>
+
+        <!-- Código do Projeto -->
+        <div class="form-group">
+          <label for="codigo_projeto" class="form-label">Código do Projeto *</label>
+          <input
+            type="text"
+            id="codigo_projeto"
+            name="codigo_projeto"
+            class="form-input"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            autocomplete="off"
+            placeholder="Digite apenas números"
+            required
+          />
+          <div id="descricao_projeto" class="form-hint" aria-live="polite">
+            <!-- Descrição do projeto (PROCV) aparece aqui -->
+          </div>
+        </div>
+
+        <!-- Quantidade -->
+        <div class="form-group">
+          <label for="quantidade" class="form-label">Quantidade *</label>
+          <input
+            type="number"
+            id="quantidade"
+            name="quantidade"
+            class="form-input"
+            min="1"
+            step="1"
+            inputmode="numeric"
+            placeholder="Ex: 10"
+            required
+          />
+        </div>
+
+        <!-- Mês de Vencimento -->
+        <div class="form-group">
+          <label for="mes_vencimento" class="form-label">Mês de Vencimento *</label>
+          <input
+            type="month"
+            id="mes_vencimento"
+            name="mes_vencimento"
+            class="form-input"
+            required
+          />
+        </div>
+
+        <!-- Botão Enviar -->
+        <button type="submit" id="btn-enviar" class="btn btn-primary">
+          <span id="btn-texto">Enviar Registro</span>
+          <span id="btn-loading" class="btn-loading" style="display:none;">Enviando...</span>
+        </button>
+      </form>
+
+      <!-- Mensagem de feedback -->
+      <div id="mensagem" class="mensagem" role="alert" aria-live="assertive" style="display:none;"></div>
+    </section>
+  </main>
+
+  <!-- Rodapé com link discreto para o dashboard -->
+  <footer class="footer">
+    <p class="footer-text">
+      &copy; <span id="ano-atual"></span> CP FANI - Controle de Vencimentos
+      <a href="dashboard.html" class="footer-link" title="Acessar painel de controle">Painel</a>
+    </p>
+  </footer>
+
+  <!-- Scripts (ordem importa: config primeiro) -->
+  <script src="js/config.js"></script>
+  <script src="js/form.js"></script>
+</body>
+</html>
