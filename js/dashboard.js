@@ -2,13 +2,15 @@
  * Controle de Vencimentos CP FANI - Lógica do Dashboard (dashboard.js)
  *
  * Responsável por:
- * - Carregar registros do Google Apps Script.
- * - Filtrar apenas vencimentos do mês atual e futuros.
- * - Agrupar dados por loja com contadores.
- * - Aplicar filtros por loja e mês.
+ * - Carregar registros e lojas do Google Apps Script.
+ * - Filtrar apenas vencimentos do mês atual e futuros (meses passados ficam na planilha).
+ * - Popular o filtro de lojas dinamicamente com base nos registros carregados.
+ * - Agrupar dados por loja com separadores visuais.
+ * - Aplicar filtros combinados por loja e mês.
  * - Renderizar tabela com cores de status (vermelho/amarelo/neutro).
- * - Atualizar cartões de resumo.
+ * - Atualizar cartões de resumo (total mês atual, próximo mês, lojas com pendências).
  * - Exportar dados filtrados para Excel via SheetJS.
+ * - Tratar estados de carregamento, vazio e erro.
  */
 
 // ============================================================
@@ -43,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elAnoAtual.textContent = new Date().getFullYear();
   }
 
-  // Definir mês mínimo no filtro (mês atual)
+  // Definir mês mínimo no filtro (mês atual) para impedir seleção de meses passados
   const hoje = new Date();
   const ano = hoje.getFullYear();
   const mes = String(hoje.getMonth() + 1).padStart(2, '0');
@@ -65,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ============================================================
 async function carregarDados() {
   mostrarLoading(true);
-  esconderDashboard();
+  esconderMensagemErro();
 
   try {
     const response = await fetch(APPS_SCRIPT_URL);
@@ -78,7 +80,7 @@ async function carregarDados() {
     registrosCache = data.registros || [];
     lojasCache = data.lojas || [];
 
-    // Popular select de lojas
+    // Popular select de lojas com base nas lojas cadastradas (não apenas as que têm registros)
     popularFiltroLojas(lojasCache);
 
     // Aplicar filtros e renderizar
@@ -92,9 +94,17 @@ async function carregarDados() {
   }
 }
 
+/**
+ * Popular o select de filtro de lojas.
+ * Inclui a opção "Todas as lojas" e ordena alfabeticamente.
+ */
 function popularFiltroLojas(lojas) {
   elFilterStore.innerHTML = '<option value="">Todas as lojas</option>';
-  lojas.forEach(loja => {
+  
+  // Ordenar alfabeticamente para facilitar a busca
+  const lojasOrdenadas = [...lojas].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  
+  lojasOrdenadas.forEach(loja => {
     const option = document.createElement('option');
     option.value = loja;
     option.textContent = loja;
@@ -105,6 +115,11 @@ function popularFiltroLojas(lojas) {
 // ============================================================
 // 5. FILTRAGEM E RENDERIZAÇÃO
 // ============================================================
+
+/**
+ * Aplica os filtros selecionados (loja e mês) sobre os registros cacheados.
+ * Sempre restringe a exibição ao mês atual e futuros.
+ */
 function aplicarFiltros() {
   const lojaFiltro = elFilterStore.value;
   const mesFiltro = elFilterMonth.value;
@@ -121,7 +136,7 @@ function aplicarFiltros() {
   const mesProximo = String(proximoMes.getMonth() + 1).padStart(2, '0');
   const mesProximoStr = `${anoProximo}-${mesProximo}`;
 
-  // Filtrar registros: apenas mês atual e futuros
+  // Filtrar registros: apenas mês atual e futuros (meses passados não aparecem)
   let registrosFiltrados = registrosCache.filter(reg => {
     return reg.mes_vencimento >= mesAtualStr;
   });
@@ -136,9 +151,9 @@ function aplicarFiltros() {
     registrosFiltrados = registrosFiltrados.filter(reg => reg.mes_vencimento === mesFiltro);
   }
 
-  // Ordenar por loja e depois por mês
+  // Ordenar por loja e depois por mês de vencimento
   registrosFiltrados.sort((a, b) => {
-    if (a.loja !== b.loja) return a.loja.localeCompare(b.loja);
+    if (a.loja !== b.loja) return a.loja.localeCompare(b.loja, 'pt-BR');
     return a.mes_vencimento.localeCompare(b.mes_vencimento);
   });
 
@@ -149,24 +164,30 @@ function aplicarFiltros() {
   renderizarTabela(registrosFiltrados, mesAtualStr, mesProximoStr);
 }
 
+/**
+ * Atualiza os três cartões de resumo com base nos registros filtrados.
+ */
 function atualizarResumo(registros, mesAtualStr, mesProximoStr) {
   const totalMesAtual = registros
     .filter(r => r.mes_vencimento === mesAtualStr)
-    .reduce((sum, r) => sum + r.quantidade, 0);
+    .reduce((sum, r) => sum + (Number(r.quantidade) || 0), 0);
 
   const totalProximoMes = registros
     .filter(r => r.mes_vencimento === mesProximoStr)
-    .reduce((sum, r) => sum + r.quantidade, 0);
+    .reduce((sum, r) => sum + (Number(r.quantidade) || 0), 0);
 
   const lojasComPendencias = new Set(
     registros.map(r => r.loja)
   ).size;
 
-  elSummaryCurrent.textContent = totalMesAtual;
-  elSummaryNext.textContent = totalProximoMes;
-  elSummaryStores.textContent = lojasComPendencias;
+  elSummaryCurrent.textContent = totalMesAtual.toLocaleString('pt-BR');
+  elSummaryNext.textContent = totalProximoMes.toLocaleString('pt-BR');
+  elSummaryStores.textContent = lojasComPendencias.toLocaleString('pt-BR');
 }
 
+/**
+ * Renderiza a tabela de dados com agrupamento por loja e cores de status.
+ */
 function renderizarTabela(registros, mesAtualStr, mesProximoStr) {
   elTableBody.innerHTML = '';
 
@@ -182,7 +203,7 @@ function renderizarTabela(registros, mesAtualStr, mesProximoStr) {
   let lojaAtual = null;
 
   registros.forEach(reg => {
-    // Adicionar linha separadora de loja
+    // Adicionar linha separadora de loja quando mudar
     if (reg.loja !== lojaAtual) {
       lojaAtual = reg.loja;
       const trSeparador = document.createElement('tr');
@@ -191,7 +212,7 @@ function renderizarTabela(registros, mesAtualStr, mesProximoStr) {
       elTableBody.appendChild(trSeparador);
     }
 
-    // Determinar classe de status
+    // Determinar classe de status e badge com base no mês de vencimento
     let classeStatus = 'linha-mes-neutro';
     let badgeClass = 'badge-futuro';
     let badgeText = 'Futuro';
@@ -216,7 +237,7 @@ function renderizarTabela(registros, mesAtualStr, mesProximoStr) {
       <td>${reg.loja}</td>
       <td>${reg.codigo_projeto}</td>
       <td>${reg.descricao_projeto}</td>
-      <td>${reg.quantidade}</td>
+      <td>${Number(reg.quantidade).toLocaleString('pt-BR')}</td>
       <td>
         ${mesFormatado}
         <span class="badge-status ${badgeClass}">${badgeText}</span>
@@ -229,6 +250,11 @@ function renderizarTabela(registros, mesAtualStr, mesProximoStr) {
 // ============================================================
 // 6. EXPORTAÇÃO EXCEL
 // ============================================================
+
+/**
+ * Exporta os dados atualmente filtrados na tela para um arquivo .xlsx.
+ * Usa a biblioteca SheetJS (xlsx) carregada via CDN no dashboard.html.
+ */
 function exportarExcel() {
   if (registrosCache.length === 0) {
     alert('Não há dados para exportar.');
@@ -261,12 +287,18 @@ function exportarExcel() {
     return;
   }
 
+  // Ordenar por loja e mês
+  dadosExport.sort((a, b) => {
+    if (a.loja !== b.loja) return a.loja.localeCompare(b.loja, 'pt-BR');
+    return a.mes_vencimento.localeCompare(b.mes_vencimento);
+  });
+
   // Preparar dados para SheetJS
   const dadosFormatados = dadosExport.map(reg => ({
     'Loja': reg.loja,
     'Código do Projeto': reg.codigo_projeto,
     'Descrição': reg.descricao_projeto,
-    'Quantidade': reg.quantidade,
+    'Quantidade': Number(reg.quantidade),
     'Mês de Vencimento': reg.mes_vencimento
   }));
 
@@ -274,7 +306,7 @@ function exportarExcel() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(dadosFormatados);
 
-  // Ajustar largura das colunas
+  // Ajustar largura das colunas para melhor legibilidade
   ws['!cols'] = [
     { wch: 20 }, // Loja
     { wch: 15 }, // Código
@@ -285,17 +317,18 @@ function exportarExcel() {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Vencimentos');
 
-  // Gerar nome do arquivo com data
+  // Gerar nome do arquivo com data atual
   const dataAtual = new Date().toISOString().split('T')[0];
-  const nomeArquivo = `vencimentos_${dataAtual}.xlsx`;
+  const nomeArquivo = `vencimentos_cp_fani_${dataAtual}.xlsx`;
 
-  // Download
+  // Disparar download
   XLSX.writeFile(wb, nomeArquivo);
 }
 
 // ============================================================
 // 7. FUNÇÕES AUXILIARES DE UI
 // ============================================================
+
 function mostrarLoading(carregando) {
   if (carregando) {
     elLoadingState.style.display = 'flex';
@@ -306,15 +339,19 @@ function mostrarLoading(carregando) {
   }
 }
 
-function esconderDashboard() {
-  elDashboardContent.style.display = 'none';
+function esconderMensagemErro() {
+  const mensagemErro = document.querySelector('.mensagem.erro');
+  if (mensagemErro) {
+    mensagemErro.remove();
+  }
 }
 
 function mostrarErro(mensagem) {
+  esconderMensagemErro();
   elLoadingState.style.display = 'none';
   elDashboardContent.style.display = 'block';
   
-  // Criar elemento de erro temporário
+  // Criar elemento de erro temporário no topo do dashboard
   const divErro = document.createElement('div');
   divErro.className = 'mensagem erro';
   divErro.textContent = mensagem;
@@ -322,8 +359,10 @@ function mostrarErro(mensagem) {
   
   elDashboardContent.insertBefore(divErro, elDashboardContent.firstChild);
   
-  // Remover após 5 segundos
+  // Remover após 6 segundos
   setTimeout(() => {
-    divErro.remove();
-  }, 5000);
+    if (divErro.parentNode) {
+      divErro.remove();
+    }
+  }, 6000);
 }
