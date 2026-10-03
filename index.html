@@ -14,6 +14,12 @@
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <!-- Cabeçalho exclusivo de impressão (visível apenas no papel/PDF) -->
+  <div class="print-header">
+    <img src="assets/logo-cp-fani.png" alt="" />
+    <span class="print-titulo">CP FANI - Registro de Vencimentos</span>
+  </div>
+
   <!-- Cabeçalho -->
   <header class="header">
     <div class="header-container">
@@ -27,11 +33,25 @@
         <span id="logo-fallback" class="logo-fallback" style="display:none;">CP FANI</span>
       </div>
       <h1 class="header-title">Controle de Vencimentos</h1>
+
+      <!-- Menu de navegação consistente entre as páginas -->
+      <nav class="nav-menu" aria-label="Navegação principal">
+        <a href="index.html" class="nav-link ativo" aria-current="page">Registrar</a>
+        <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="produtos.html" class="nav-link">Produtos</a>
+        <a href="relatorios.html" class="nav-link">Relatórios</a>
+      </nav>
     </div>
   </header>
 
   <!-- Conteúdo principal -->
   <main class="main">
+    <noscript>
+      <div class="mensagem erro" style="display:block;">
+        Este sistema requer JavaScript habilitado para funcionar.
+      </div>
+    </noscript>
+
     <section class="form-section">
       <h2 class="section-title">Novo Registro</h2>
       <p class="section-subtitle">Preencha os dados abaixo para registrar um vencimento.</p>
@@ -39,24 +59,42 @@
       <form id="form-vencimento" class="form" novalidate>
         <!-- Loja -->
         <div class="form-group">
-          <label for="loja" class="form-label">Loja *</label>
+          <label for="loja" class="form-label">Loja</label>
           <select id="loja" name="loja" class="form-select" required>
             <option value="">Carregando lojas...</option>
           </select>
         </div>
 
+        <!-- Painel R1: itens já registrados pela loja selecionada -->
+        <div class="form-group" id="grupo-painel-loja">
+          <p class="cartao-titulo" id="painel-titulo">Itens já registrados desta loja</p>
+          <div
+            id="painel-itens-loja"
+            class="painel-itens-loja escondido"
+            aria-live="polite"
+            aria-labelledby="painel-titulo"
+          >
+            <ul id="painel-lista"></ul>
+            <p id="painel-vazio" class="painel-vazio escondido">
+              Nenhum item registrado para esta loja no mês atual ou seguintes.
+            </p>
+          </div>
+        </div>
+
         <!-- Código do Projeto -->
         <div class="form-group">
-          <label for="codigo_projeto" class="form-label">Código do Projeto *</label>
+          <label for="codigo_projeto" class="form-label">Código do Projeto</label>
           <input
             type="text"
             id="codigo_projeto"
             name="codigo_projeto"
             class="form-input"
             inputmode="numeric"
-            pattern="[0-9]*"
+            pattern="[0-9]{5}"
+            maxlength="5"
             autocomplete="off"
-            placeholder="Digite apenas números"
+            placeholder="Digite os 5 dígitos"
+            aria-describedby="descricao_projeto"
             required
           />
           <div id="descricao_projeto" class="form-hint" aria-live="polite">
@@ -66,7 +104,7 @@
 
         <!-- Quantidade -->
         <div class="form-group">
-          <label for="quantidade" class="form-label">Quantidade *</label>
+          <label for="quantidade" class="form-label">Quantidade</label>
           <input
             type="number"
             id="quantidade"
@@ -82,7 +120,7 @@
 
         <!-- Mês de Vencimento -->
         <div class="form-group">
-          <label for="mes_vencimento" class="form-label">Mês de Vencimento *</label>
+          <label for="mes_vencimento" class="form-label">Mês de Vencimento</label>
           <input
             type="month"
             id="mes_vencimento"
@@ -92,11 +130,17 @@
           />
         </div>
 
-        <!-- Botão Enviar -->
-        <button type="submit" id="btn-enviar" class="btn btn-primary">
-          <span id="btn-texto">Enviar Registro</span>
-          <span id="btn-loading" class="btn-loading" style="display:none;">Enviando...</span>
-        </button>
+        <!-- Ações: enviar (reseta tudo) ou salvar e adicionar outro (mantém loja e mês) -->
+        <div class="form-group">
+          <button type="submit" id="btn-enviar" class="btn btn-primary">
+            <span id="btn-texto">Enviar Registro</span>
+            <span id="btn-loading" class="btn-loading" style="display:none;">Enviando...</span>
+          </button>
+          <button type="submit" id="btn-salvar-outro" class="btn btn-secondary">
+            <span id="btn-salvar-outro-texto">Salvar e adicionar outro</span>
+            <span id="btn-salvar-outro-loading" class="btn-loading" style="display:none;">Enviando...</span>
+          </button>
+        </div>
       </form>
 
       <!-- Mensagem de feedback -->
