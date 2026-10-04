@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Cadastro de produtos - CP FANI" />
+  <title>Produtos | CP FANI</title>
+
+  <!-- Favicon: logo da CP FANI -->
+  <link rel="icon" type="image/png" href="assets/logo-cp-fani.png" />
+  <link rel="apple-touch-icon" href="assets/logo-cp-fani.png" />
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- Cabeçalho exclusivo de impressão (visível apenas no papel/PDF) -->
+  <div class="print-header">
+    <img src="assets/logo-cp-fani.png" alt="" />
+    <span class="print-titulo">CP FANI - Cadastro de Produtos</span>
+  </div>
+
+  <!-- Cabeçalho -->
+  <header class="header">
+    <div class="header-container">
+      <div class="logo-wrapper">
+        <img
+          src="assets/logo-cp-fani.png"
+          alt="Logo CP FANI"
+          class="logo"
+          onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
+        />
+        <span id="logo-fallback" class="logo-fallback" style="display:none;">CP FANI</span>
+      </div>
+      <h1 class="header-title">Cadastro de Produtos</h1>
+
+      <!-- Menu de navegação consistente entre as páginas -->
+      <nav class="nav-menu" aria-label="Navegação principal">
+        <a href="index.html" class="nav-link">Registrar</a>
+        <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="produtos.html" class="nav-link ativo" aria-current="page">Produtos</a>
+        <a href="relatorios.html" class="nav-link">Relatórios</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Conteúdo principal -->
+  <main class="main">
+    <noscript>
+      <div class="mensagem erro" style="display:block;">
+        Este sistema requer JavaScript habilitado para funcionar.
+      </div>
+    </noscript>
+
+    <div class="produtos-layout">
+      <!-- Coluna 1: formulário de cadastro/edição -->
+      <section class="form-section produtos-formulario">
+        <h2 class="section-title" id="titulo-form-produto">Novo Produto</h2>
+        <p class="section-subtitle">
+          O código é sempre texto com 5 dígitos (zeros à esquerda são preservados).
+        </p>
+
+        <form id="form-produto" class="form" novalidate>
+          <!-- Código -->
+          <div class="form-group">
+            <label for="prod-codigo" class="form-label">Código do Produto</label>
+            <input
+              type="text"
+              id="prod-codigo"
+              name="prod-codigo"
+              class="form-input"
+              inputmode="numeric"
+              pattern="[0-9]{5}"
+              maxlength="5"
+              autocomplete="off"
+              placeholder="Digite os 5 dígitos"
+              required
+            />
+            <div id="prod-codigo-hint" class="form-hint" aria-live="polite"></div>
+          </div>
+
+          <!-- Descrição -->
+          <div class="form-group">
+            <label for="prod-descricao" class="form-label">Descrição</label>
+            <input
+              type="text"
+              id="prod-descricao"
+              name="prod-descricao"
+              class="form-input"
+              maxlength="120"
+              autocomplete="off"
+              placeholder="Ex: Leite Integral 1L"
+              required
+            />
+          </div>
+
+          <!-- Categoria -->
+          <div class="form-group">
+            <label for="prod-categoria" class="form-label opcional">Categoria</label>
+            <input
+              type="text"
+              id="prod-categoria"
+              name="prod-categoria"
+              class="form-input"
+              maxlength="120"
+              autocomplete="off"
+              placeholder="Ex: Laticínios"
+            />
+          </div>
+
+          <!-- Unidade -->
+          <div class="form-group">
+            <label for="prod-unidade" class="form-label opcional">Unidade</label>
+            <input
+              type="text"
+              id="prod-unidade"
+              name="prod-unidade"
+              class="form-input"
+              maxlength="120"
+              autocomplete="off"
+              placeholder="Ex: UN, CX, KG"
+            />
+          </div>
+
+          <!-- Situação -->
+          <div class="form-group">
+            <label for="prod-ativo" class="form-label">Situação</label>
+            <select id="prod-ativo" name="prod-ativo" class="form-select" required>
+              <option value="SIM">SIM (ativo)</option>
+              <option value="NÃO">NÃO (inativo)</option>
+            </select>
+            <div class="form-hint">
+              Inativar não apaga o produto: ele permanece no histórico de registros.
+            </div>
+          </div>
+
+          <!-- Ações do formulário -->
+          <div class="form-group">
+            <button type="submit" id="btn-salvar-produto" class="btn btn-primary">
+              <span id="btn-salvar-produto-texto">Salvar Produto</span>
+              <span id="btn-salvar-produto-loading" class="btn-loading" style="display:none;">Salvando...</span>
+            </button>
+            <button
+              type="button"
+              id="btn-cancelar-edicao"
+              class="btn btn-secondary escondido"
+            >
+              Cancelar Edição
+            </button>
+          </div>
+        </form>
+
+        <!-- Mensagem de feedback do formulário -->
+        <div
+          id="mensagem-produtos"
+          class="mensagem"
+          role="alert"
+          aria-live="assertive"
+          style="display:none;"
+        ></div>
+      </section>
+
+      <!-- Coluna 2: busca, lista e importação -->
+      <section>
+        <h2 class="section-title">Produtos Cadastrados</h2>
+        <p class="section-subtitle">Busque por código ou descrição. Edite ou inative sem apagar histórico.</p>
+
+        <!-- Busca -->
+        <div class="busca-wrapper">
+          <label for="busca-produto" class="sr-only">Buscar produto por código ou descrição</label>
+          <input
+            type="search"
+            id="busca-produto"
+            class="form-input"
+            placeholder="Buscar por código ou descrição..."
+            autocomplete="off"
+          />
+        </div>
+
+        <!-- Tabela de produtos -->
+        <div class="dashboard-tabela-container">
+          <table class="dashboard-tabela" id="tabela-produtos">
+            <thead>
+              <tr>
+                <th scope="col">Código</th>
+                <th scope="col">Descrição</th>
+                <th scope="col">Categoria</th>
+                <th scope="col">Unidade</th>
+                <th scope="col">Situação</th>
+                <th scope="col">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="produtos-body">
+              <!-- Linhas preenchidas via js/produtos.js (sem innerHTML) -->
+            </tbody>
+          </table>
+          <div id="produtos-vazio" class="estado-vazio" style="display:none;">
+            Nenhum produto encontrado.
+          </div>
+        </div>
+
+        <!-- Importação colada -->
+        <h3 class="section-title mt-lg" style="font-size: 1.15rem;">Importar Lista</h3>
+        <p class="section-subtitle">
+          Cole uma linha por produto no formato <strong>código;descrição;categoria</strong>.
+          Linhas inválidas ou duplicadas são reportadas abaixo, sem interromper as demais.
+        </p>
+        <div class="form-group">
+          <label for="import-area" class="sr-only">Lista de produtos para importar</label>
+          <textarea
+            id="import-area"
+            class="import-area"
+            placeholder="01234;Leite Integral 1L;Laticínios&#10;01235;Iogurte 200g;Laticínios"
+          ></textarea>
+        </div>
+        <div class="form-group">
+          <button type="button" id="btn-importar" class="btn btn-secondary">
+            <span id="btn-importar-texto">Importar Colados</span>
+            <span id="btn-importar-loading" class="btn-loading" style="display:none;">Importando...</span>
+          </button>
+        </div>
+        <div id="import-relatorio" class="import-relatorio" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Rodapé -->
+  <footer class="footer">
+    <p class="footer-text">
+      &copy; <span id="ano-atual"></span> CP FANI - Controle de Vencimentos
+    </p>
+  </footer>
+
+  <!-- Scripts (ordem importa: config primeiro) -->
+  <script src="js/config.js"></script>
+  <script src="js/produtos.js"></script>
+</body>
+</html>
