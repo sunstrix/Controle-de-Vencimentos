@@ -102,6 +102,23 @@
           </div>
         </div>
 
+        <!-- Lote (opcional): identifica o lote do produto; mesma loja+código+lote+mês = soma -->
+        <div class="form-group">
+          <label for="lote" class="form-label opcional">Lote</label>
+          <input
+            type="text"
+            id="lote"
+            name="lote"
+            class="form-input"
+            maxlength="20"
+            autocomplete="off"
+            placeholder="Ex: 2026-001"
+          />
+          <div class="form-hint">
+            Identifica o lote do produto. Registros com mesma loja, código, lote e mês são somados.
+          </div>
+        </div>
+
         <!-- Quantidade -->
         <div class="form-group">
           <label for="quantidade" class="form-label">Quantidade</label>
