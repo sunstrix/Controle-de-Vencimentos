@@ -21,6 +21,19 @@
  */
 
 // ============================================================
+// LIMITES DE TAMANHO DE CAMPOS (H5 - autoridade server-side)
+// ============================================================
+var LIMITES = {
+  LOJA: 60,
+  LOTE: 20,
+  DESCRICAO: 120,
+  CATEGORIA: 120,
+  UNIDADE: 120,
+  MOTIVO: 40,
+  RESPONSAVEL: 80
+};
+
+// ============================================================
 // HELPERS
 // ============================================================
 
@@ -44,6 +57,17 @@ function sanitizeText(text) {
     s = s.substring(1);
   }
   return s;
+}
+
+/**
+ * Valida tamanho máximo de um campo de texto (H5).
+ * Lança erro com mensagem clara se exceder o limite.
+ */
+function validateLength(nome, valor, max) {
+  var v = String(valor || '');
+  if (v.length > max) {
+    throw new Error(nome + ' deve ter no máximo ' + max + ' caracteres (atual: ' + v.length + ').');
+  }
 }
 
 /**
@@ -352,7 +376,8 @@ function doPost(e) {
 }
 
 /**
- * POST padrão: registra novo lote ou soma quantidade ao existente
+ * POST padrão: registra novo lote ou soma quantidade ao existente.
+ * Chave de soma: loja + código + lote + mês (status ATIVO).
  */
 function doPostRegistrar(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -369,11 +394,12 @@ function doPostRegistrar(payload) {
     throw new Error('O código do projeto deve ter exatamente 5 dígitos.');
   }
 
-  // 2. Loja: obrigatória e existente na aba "Lojas"
+  // 2. Loja: obrigatória, sanitizada, dentro do limite e existente na aba "Lojas"
   var loja = sanitizeText(payload.loja);
   if (!loja) {
     throw new Error('A loja é obrigatória.');
   }
+  validateLength('Loja', loja, LIMITES.LOJA);
   
   var sheetLojas = ss.getSheetByName('Lojas');
   var lojasRaw = getSheetData(sheetLojas, 1);
@@ -412,10 +438,11 @@ function doPostRegistrar(payload) {
     }
   });
 
-  // 6. Lote (opcional, sanitizado)
+  // 6. Lote (opcional, sanitizado e dentro do limite)
   var lote = sanitizeText(payload.lote || '');
+  validateLength('Lote', lote, LIMITES.LOTE);
 
-  // --- LÓGICA DE SOMA DE DUPLICADOS ---
+  // --- LÓGICA DE SOMA DE DUPLICADOS (chave: loja+código+lote+mês, status ATIVO) ---
   
   var registrosRaw = getSheetData(sheet, 10);
   var linhaExistente = -1;
@@ -425,12 +452,17 @@ function doPostRegistrar(payload) {
     var row = registrosRaw[i];
     var rowCodigo = normalizeCodigo(row[2]);
     var rowLoja = String(row[1] || '').trim();
+    var rowLote = String(row[7] || '').trim();
     var rowMes = row[5] ? (row[5] instanceof Date 
       ? formatDateTime(row[5], 'yyyy-MM') 
       : String(row[5])) : '';
     var rowStatus = String(row[8] || 'ATIVO').trim().toUpperCase();
     
-    if (rowCodigo === codigo && rowLoja === loja && rowMes === mesVencimento && rowStatus === 'ATIVO') {
+    if (rowCodigo === codigo &&
+        rowLoja === loja &&
+        rowLote === lote &&
+        rowMes === mesVencimento &&
+        rowStatus === 'ATIVO') {
       linhaExistente = i + 2; // +2 porque getSheetData ignora cabeçalho
       qtdExistente = Number(row[4]) || 0;
       break;
@@ -493,9 +525,14 @@ function doPostSalvarProduto(payload) {
   if (!descricao) {
     throw new Error('A descrição é obrigatória.');
   }
+  validateLength('Descrição', descricao, LIMITES.DESCRICAO);
   
   var categoria = sanitizeText(payload.categoria || '');
+  validateLength('Categoria', categoria, LIMITES.CATEGORIA);
+  
   var unidade = sanitizeText(payload.unidade || '');
+  validateLength('Unidade', unidade, LIMITES.UNIDADE);
+  
   var ativo = String(payload.ativo || 'SIM').trim().toUpperCase();
   if (ativo !== 'SIM' && ativo !== 'NÃO') ativo = 'SIM';
 
@@ -552,8 +589,10 @@ function doPostDarBaixa(payload) {
   if (!motivo) {
     throw new Error('O motivo da baixa é obrigatório.');
   }
+  validateLength('Motivo', motivo, LIMITES.MOTIVO);
 
   var responsavel = sanitizeText(payload.responsavel || '');
+  validateLength('Responsável', responsavel, LIMITES.RESPONSAVEL);
 
   // Encontra o registro
   var registrosRaw = getSheetData(sheetRegistros, 10);
