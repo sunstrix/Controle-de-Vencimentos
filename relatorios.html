@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Relatórios e gráficos de vencimentos - CP FANI" />
+  <title>Relatórios | CP FANI</title>
+
+  <!-- Favicon: logo da CP FANI -->
+  <link rel="icon" type="image/png" href="assets/logo-cp-fani.png" />
+  <link rel="apple-touch-icon" href="assets/logo-cp-fani.png" />
+
+  <!-- Estilos -->
+  <link rel="stylesheet" href="css/style.css" />
+
+  <!-- Chart.js com versão fixa (gráficos) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
+    crossorigin="anonymous"
+  ></script>
+
+  <!-- SheetJS com versão fixa (exportação Excel) -->
+  <script
+    src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"
+    crossorigin="anonymous"
+  ></script>
+</head>
+<body>
+  <!-- Cabeçalho exclusivo de impressão (visível apenas no papel/PDF) -->
+  <div class="print-header">
+    <img src="assets/logo-cp-fani.png" alt="" />
+    <span class="print-titulo">CP FANI - Relatórios de Vencimentos</span>
+  </div>
+
+  <!-- Cabeçalho -->
+  <header class="header">
+    <div class="header-container">
+      <div class="logo-wrapper">
+        <img
+          src="assets/logo-cp-fani.png"
+          alt="Logo CP FANI"
+          class="logo"
+          onerror="this.style.display='none'; document.getElementById('logo-fallback').style.display='block';"
+        />
+        <span id="logo-fallback" class="logo-fallback" style="display:none;">CP FANI</span>
+      </div>
+      <h1 class="header-title">Relatórios e Gráficos</h1>
+
+      <!-- Menu de navegação consistente entre as páginas -->
+      <nav class="nav-menu" aria-label="Navegação principal">
+        <a href="index.html" class="nav-link">Registrar</a>
+        <a href="dashboard.html" class="nav-link">Dashboard</a>
+        <a href="produtos.html" class="nav-link">Produtos</a>
+        <a href="relatorios.html" class="nav-link ativo" aria-current="page">Relatórios</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Conteúdo principal -->
+  <main class="main">
+    <noscript>
+      <div class="mensagem erro" style="display:block;">
+        Este sistema requer JavaScript habilitado para funcionar.
+      </div>
+    </noscript>
+
+    <!-- Estado de carregamento -->
+    <div id="rel-loading" class="estado-carregando">
+      <div class="spinner-grande"></div>
+      <p>Carregando dados dos relatórios...</p>
+    </div>
+
+    <!-- Conteúdo (oculto até carregar) -->
+    <div id="rel-content" style="display:none;">
+
+      <!-- Resumo dos filtros aplicados (visível na tela e no PDF) -->
+      <p id="rel-filtros-resumo" class="section-subtitle"></p>
+
+      <!-- Filtros (ocultos na impressão) -->
+      <section class="dashboard-filtros relatorios-filtros">
+        <div class="filtro-grupo">
+          <label for="filtro-periodo">Período (meses)</label>
+          <select id="filtro-periodo">
+            <option value="3">3 meses</option>
+            <option value="6" selected>6 meses (padrão)</option>
+            <option value="12">12 meses</option>
+            <option value="0">Tudo</option>
+          </select>
+          <div class="form-hint">
+            "A vencer": mês atual + N à frente. "Perdas": mês atual + N para trás.
+          </div>
+        </div>
+        <div class="filtro-grupo">
+          <label for="filtro-loja">Loja</label>
+          <select id="filtro-loja">
+            <option value="">Todas as lojas</option>
+          </select>
+        </div>
+        <div class="filtro-grupo">
+          <label for="filtro-categoria">Categoria</label>
+          <select id="filtro-categoria">
+            <option value="">Todas as categorias</option>
+          </select>
+        </div>
+        <div class="acoes-dashboard">
+          <button id="btn-rel-update" type="button" class="btn btn-secondary">
+            Atualizar
+          </button>
+          <button id="btn-rel-export" type="button" class="btn btn-primary" style="width:auto;">
+            Exportar Excel
+          </button>
+          <button id="btn-rel-print" type="button" class="btn btn-secondary">
+            Imprimir / Salvar PDF
+          </button>
+        </div>
+      </section>
+
+      <!-- Mensagem de feedback -->
+      <div
+        id="rel-mensagem"
+        class="mensagem"
+        role="alert"
+        aria-live="assertive"
+        style="display:none;"
+      ></div>
+
+      <!-- Grade de gráficos -->
+      <section class="relatorios-grid">
+        <!-- Gráfico 1: quantidade a vencer por mês -->
+        <div class="grafico-card largo">
+          <h3 id="titulo-chart-mes">Quantidade a vencer por mês (próximos meses)</h3>
+          <div class="grafico-wrapper">
+            <canvas id="chart-mes" role="img" aria-label="Gráfico de barras: quantidade a vencer por mês"></canvas>
+          </div>
+        </div>
+
+        <!-- Gráfico 2: quantidade a vencer por loja -->
+        <div class="grafico-card">
+          <h3 id="titulo-chart-loja">Quantidade a vencer por loja</h3>
+          <div class="grafico-wrapper">
+            <canvas id="chart-loja" role="img" aria-label="Gráfico de barras: quantidade a vencer por loja"></canvas>
+          </div>
+        </div>
+
+        <!-- Gráfico 3: distribuição por categoria -->
+        <div class="grafico-card">
+          <h3 id="titulo-chart-categoria">Distribuição por categoria</h3>
+          <div class="grafico-wrapper">
+            <canvas id="chart-categoria" role="img" aria-label="Gráfico de rosca: distribuição por categoria"></canvas>
+          </div>
+        </div>
+
+        <!-- Gráfico 4: perdas por motivo e mês -->
+        <div class="grafico-card largo">
+          <h3 id="titulo-chart-perdas">Perdas: quantidade baixada por motivo, por mês</h3>
+          <div class="grafico-wrapper">
+            <canvas id="chart-perdas" role="img" aria-label="Gráfico de barras empilhadas: quantidade baixada por motivo e por mês"></canvas>
+          </div>
+        </div>
+
+        <!-- Ranking top 10 -->
+        <div class="grafico-card largo">
+          <h3 id="titulo-ranking">Top 10 produtos com mais quantidade a vencer</h3>
+          <ol id="ranking-lista" class="ranking-lista">
+            <!-- Preenchido via relatorios.js (sem innerHTML) -->
+          </ol>
+          <p id="ranking-vazio" class="estado-vazio" style="display:none;">
+            Nenhum produto com quantidade a vencer no período selecionado.
+          </p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Rodapé -->
+  <footer class="footer">
+    <p class="footer-text">
+      &copy; <span id="ano-atual"></span> CP FANI - Controle de Vencimentos
+    </p>
+  </footer>
+
+  <!-- Scripts (ordem importa: config primeiro) -->
+  <script src="js/config.js"></script>
+  <script src="js/relatorios.js"></script>
+</body>
+</html>
