@@ -17,6 +17,8 @@
  * ⚠️ ANTES DE RODAR A MIGRAÇÃO: faça uma cópia da planilha (Arquivo > Fazer cópia)
  * 
  * Para rodar a migração: Editor do Apps Script > selecione "migrarPlanilha" > Executar
+ *   A migração é idempotente: formata colunas como texto, preenche IDs/status vazios,
+ *   cria cabeçalhos novos (Projetos C-E, Registros G-J) e a aba "Baixas" se não existir.
  * Para listar duplicados: Editor do Apps Script > selecione "listarCodigosDuplicados" > Executar
  */
 
@@ -110,6 +112,48 @@ function getSheetData(sheet, numCols) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
   return sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+}
+
+/**
+ * Preenche cabeçalhos (linha 1) SOMENTE onde a célula está vazia.
+ * Idempotente: nunca sobrescreve cabeçalhos existentes.
+ * @param {Sheet} sheet - aba alvo
+ * @param {Object} nomes - mapa { numeroDaColuna: 'nomeDoCabecalho' }
+ */
+function garantirCabecalhos(sheet, nomes) {
+  var linhaCabecalho = sheet.getRange(1, 1, 1, Math.max(sheet.getMaxColumns(), 10)).getValues()[0];
+  for (var col in nomes) {
+    if (!nomes.hasOwnProperty(col)) continue;
+    var c = Number(col);
+    var atual = String(linhaCabecalho[c - 1] || '').trim();
+    if (atual === '') {
+      sheet.getRange(1, c).setValue(nomes[col]);
+    }
+  }
+}
+
+/**
+ * Garante que a aba "Baixas" exista com os 7 cabeçalhos e código como texto.
+ * Idempotente: se a aba já existe, apenas completa cabeçalhos vazios.
+ */
+function garantirAbaBaixas(ss) {
+  var sheet = ss.getSheetByName('Baixas');
+  if (!sheet) {
+    sheet = ss.insertSheet('Baixas');
+  }
+  garantirCabecalhos(sheet, {
+    1: 'id_registro',
+    2: 'data',
+    3: 'loja',
+    4: 'codigo',
+    5: 'quantidade_baixada',
+    6: 'motivo',
+    7: 'responsavel'
+  });
+  // Código sempre como texto (preserva zeros à esquerda)
+  var lastRow = Math.max(sheet.getLastRow(), 1);
+  sheet.getRange(1, 4, lastRow, 1).setNumberFormat('@');
+  return sheet;
 }
 
 // ============================================================
@@ -564,16 +608,19 @@ function doPostSalvarProduto(payload) {
 }
 
 /**
- * POST aditivo: registra baixa total ou parcial
+ * POST aditivo: registra baixa total ou parcial.
+ * Se a aba "Baixas" não existir, ela é criada automaticamente (defesa em profundidade).
  */
 function doPostDarBaixa(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheetRegistros = ss.getSheetByName('Registros');
-  var sheetBaixas = ss.getSheetByName('Baixas');
   
-  if (!sheetRegistros || !sheetBaixas) {
-    throw new Error("Abas 'Registros' ou 'Baixas' não encontradas.");
+  if (!sheetRegistros) {
+    throw new Error("Aba 'Registros' não encontrada na planilha.");
   }
+  
+  // Garante a aba "Baixas" (cria com cabeçalhos se não existir)
+  var sheetBaixas = garantirAbaBaixas(ss);
 
   var idRegistro = String(payload.id_registro || '').trim();
   if (!idRegistro) {
@@ -647,8 +694,17 @@ function doPostDarBaixa(payload) {
 // ============================================================
 
 /**
- * Migração idempotente: formata colunas como texto, preenche IDs e status vazios
+ * Migração idempotente:
+ * - Formata colunas de código, mês e ID como texto ('@')
+ * - Preenche IDs (R000001...) e status (ATIVO) onde vazios
+ * - Normaliza códigos para 5 dígitos com zeros à esquerda
+ * - Cria cabeçalhos novos SOMENTE onde vazios:
+ *     Projetos: C categoria, D unidade, E ativo
+ *     Registros: G id, H lote, I status, J atualizado_em
+ * - Cria a aba "Baixas" com 7 cabeçalhos, se não existir
+ *
  * ⚠️ ANTES DE RODAR: faça uma cópia da planilha (Arquivo > Fazer cópia)
+ * Pode ser rodada mais de uma vez: nada é sobrescrito ou duplicado.
  */
 function migrarPlanilha() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -660,6 +716,12 @@ function migrarPlanilha() {
     if (lastRowP > 0) {
       sheetProjetos.getRange(1, 1, lastRowP, 1).setNumberFormat('@'); // Coluna A: código
     }
+    // Cabeçalhos novos da evolução B (somente células vazias)
+    garantirCabecalhos(sheetProjetos, {
+      3: 'categoria',
+      4: 'unidade',
+      5: 'ativo'
+    });
   }
   
   var sheetRegistros = ss.getSheetByName('Registros');
@@ -670,6 +732,13 @@ function migrarPlanilha() {
       sheetRegistros.getRange(1, 6, lastRowR, 1).setNumberFormat('@'); // Coluna F: mês
       sheetRegistros.getRange(1, 7, lastRowR, 1).setNumberFormat('@'); // Coluna G: ID
     }
+    // Cabeçalhos novos da evolução C (somente células vazias)
+    garantirCabecalhos(sheetRegistros, {
+      7: 'id',
+      8: 'lote',
+      9: 'status',
+      10: 'atualizado_em'
+    });
     
     // Preenche IDs e status vazios
     if (lastRowR > 1) {
@@ -711,6 +780,9 @@ function migrarPlanilha() {
       }
     }
   }
+  
+  // Garante a aba "Baixas" com cabeçalhos (idempotente)
+  garantirAbaBaixas(ss);
   
   Logger.log('Migração concluída com sucesso.');
   return 'Migração concluída com sucesso.';
