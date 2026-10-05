@@ -1,0 +1,90 @@
+# ============================================================
+# Controle de Vencimentos CP FANI - .gitignore
+#
+# EXCEÇÕES DELIBERADAS (DEVEM ser commitados):
+# - assets/logo-cp-fani.png  -> identidade visual, favicon e relatórios impressos
+# - js/config.js             -> URL pública do Web App (decisão de negócio: sistema aberto)
+#
+# REGRA DE OURO: planilhas com dados do negócio (lojas, produtos,
+# quantidades) NUNCA vão para o repositório público.
+# ============================================================
+
+# ------------------------------------------------------------
+# Sistema operacional
+# ------------------------------------------------------------
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ------------------------------------------------------------
+# Editores e IDEs
+# ------------------------------------------------------------
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# ------------------------------------------------------------
+# Planilhas e dados locais (sensíveis - jamais commitar)
+# ------------------------------------------------------------
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.ods
+
+# ------------------------------------------------------------
+# Cópias e backups da planilha (nomes típicos do Google Sheets/Excel)
+# ------------------------------------------------------------
+*cópia*
+*Cópia*
+*copy*
+*Copy*
+*backup*
+*Backup*
+*BAK*
+*.bak
+~$*
+
+# ------------------------------------------------------------
+# Logs e temporários
+# ------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+
+# ------------------------------------------------------------
+# Node (projeto não tem build; protege se alguma ferramenta for usada)
+# ------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# ------------------------------------------------------------
+# Segredos e credenciais
+# ------------------------------------------------------------
+.env
+.env.*
+*.pem
+*.key
+*.p12
+credentials.json
+token.json
+
+# ------------------------------------------------------------
+# Netlify CLI (estado local de deploy)
+# ------------------------------------------------------------
+.netlify/
+
+# ------------------------------------------------------------
+# clasp (Apps Script CLI): .clasp.json contém o ID do projeto,
+# não deve ir para repositório público
+# ------------------------------------------------------------
+.clasp.json
+.claspignore
