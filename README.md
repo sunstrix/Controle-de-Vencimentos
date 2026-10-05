@@ -1,242 +1,265 @@
-\# Controle de Vencimentos CP FANI
+# Controle de Vencimentos CP FANI
 
+Sistema web interno da CP FANI (17 lojas) para controle de produtos próximos do vencimento.
+As lojas registram lotes via formulário; a gestão acompanha em dashboard, cadastra produtos
+e analisa gráficos e perdas em relatórios, com exportação para Excel e impressão em PDF.
 
+**Páginas:** Registrar (`index.html`) · Dashboard (`dashboard.html`) · Produtos (`produtos.html`) · Relatórios (`relatorios.html`)
 
-Sistema web para controle de vencimento de produtos distribuídos nas 17 lojas da CP FANI. O sistema permite o registro de vencimentos via formulário e a visualização consolidada em um dashboard interativo com exportação para Excel.
+**Versão do sistema:** 2.0.0 (ver `js/config.js`)
 
+---
 
+## Stack
 
-\## 🛠️ Tecnologias Utilizadas
+- **Front-end:** HTML5, CSS3 e JavaScript puro (sem build), hospedado no Netlify
+- **Back-end:** Google Apps Script (Web App)
+- **Banco de dados:** Google Sheets
+- **Bibliotecas via CDN com versão fixa:** SheetJS `xlsx 0.18.5` e Chart.js `4.4.1`
 
+---
 
+## Estrutura de arquivos
 
-\- \*\*Front-end:\*\* HTML5, CSS3, JavaScript (Vanilla)
-
-\- \*\*Back-end:\*\* Google Apps Script
-
-\- \*\*Banco de Dados:\*\* Google Sheets
-
-\- \*\*Hospedagem:\*\* Netlify
-
-\- \*\*Exportação:\*\* SheetJS (xlsx)
-
-
-
-\---
-
-
-
-\## Passo a Passo de Instalação
-
-
-
-\### 1. Configuração da Planilha Google (Banco de Dados)
-
-
-
-1\. Acesse \[sheets.google.com](https://sheets.google.com) e crie uma nova planilha.
-
-2\. Renomeie as abas (na parte inferior) exatamente para:
-
-&#x20;  - `Lojas`
-
-&#x20;  - `Projetos`
-
-&#x20;  - `Registros`
-
-
-
-\#### Estrutura das Abas
-
-
-
-\*\*Aba `Lojas`\*\*
-
-\- Linha 1 (Cabeçalho): `Nome da Loja`
-
-\- A partir da Linha 2: Liste as 17 lojas (ex: Loja 01, Loja 02, ..., Loja 17).
-
-
-
-\*\*Aba `Projetos`\*\*
-
-\- Linha 1 (Cabeçalho): `Código` | `Descrição`
-
-\- A partir da Linha 2: Cole os dados do arquivo `BD.xlsx` (código do produto na coluna A, descrição na coluna B).
-
-&#x20; - \*Nota: O sistema faz a busca automática (PROCV) com base no código numérico.\*
-
-
-
-\*\*Aba `Registros`\*\*
-
-\- Linha 1 (Cabeçalho): `Data Registro` | `Loja` | `Código Projeto` | `Descrição` | `Quantidade` | `Mês Vencimento`
-
-\- \*Deixe as linhas de baixo vazias. O sistema preencherá automaticamente via formulário.\*
-
-
-
-\### 2. Configuração do Google Apps Script (Back-end)
-
-
-
-1\. Na sua planilha, clique no menu \*\*Extensões\*\* > \*\*Apps Script\*\*.
-
-2\. Apague qualquer código que estiver no editor (`Código.gs`).
-
-3\. Copie o conteúdo do arquivo `apps-script/Code.gs` deste repositório e cole no editor.
-
-4\. Clique no ícone de \*\*Salvar\*\* (disquete).
-
-5\. Clique no botão azul \*\*Implantar\*\* (Deploy) > \*\*Nova implantação\*\*.
-
-6\. Clique na engrenagem ao lado de "Selecione o tipo" e escolha \*\*App da Web\*\*.
-
-7\. Preencha as configurações:
-
-&#x20;  - \*\*Descrição:\*\* `API Controle de Vencimentos`
-
-&#x20;  - \*\*Executar como:\*\* `Eu` (seu e-mail)
-
-&#x20;  - \*\*Quem pode acessar:\*\* `Qualquer pessoa` (Essencial para o formulário funcionar sem login do Google).
-
-8\. Clique em \*\*Implantar\*\*.
-
-9\. O Google pedirá autorização. Conceda as permissões (se aparecer "App não verificado", clique em "Avançado" > "Acessar... (não seguro)").
-
-10\. \*\*Copie a URL do App da Web\*\* (ela termina em `/exec`). Você usará essa URL no próximo passo.
-
-
-
-\### 3. Configuração do Front-end
-
-
-
-1\. Abra o arquivo `js/config.js` no seu editor de código.
-
-2\. Substitua o valor da constante `APPS\_SCRIPT\_URL` pela URL que você copiou no passo anterior:
-
-
-
-```javascript
-
-const APPS\_SCRIPT\_URL = "https://script.google.com/macros/s/SUA\_URL\_AQUI/exec";
-
-```
-
-
-
-\### 4. Publicação no GitHub e Netlify
-
-
-
-1\. Crie um repositório no GitHub (ex: `Controle-de-Vencimentos`).
-
-2\. Faça o upload de todos os arquivos deste projeto para o repositório.
-
-3\. Acesse \[netlify.com](https://netlify.com) e faça login.
-
-4\. Clique em \*\*Add new site\*\* > \*\*Import an existing project\*\*.
-
-5\. Escolha \*\*GitHub\*\* e autorize o acesso.
-
-6\. Selecione o repositório `Controle-de-Vencimentos`.
-
-7\. Nas configurações de build, deixe tudo em branco (é um site estático).
-
-8\. Clique em \*\*Deploy site\*\*.
-
-9\. O Netlify fornecerá uma URL (ex: `https://controle-vencimentos.netlify.app`).
-
-
-
-\---
-
-
-
-\## 🔒 Segurança e Limitações
-
-
-
-\- \*\*Acesso Público:\*\* Como o sistema não possui login, qualquer pessoa com o link do dashboard pode visualizar os dados.
-
-\- \*\*Proteção Simples (PIN Visual):\*\* Se necessário, você pode adicionar uma senha simples no `dashboard.html` para ocultar o conteúdo até que o usuário digite o código correto. Isso não é uma segurança de nível empresarial, mas evita olhares curiosos.
-
-\- \*\*Validação:\*\* O sistema valida dados no front-end e no back-end (Apps Script) para evitar registros inválidos ou duplicados por erro de digitação.
-
-
-
-\---
-
-
-
-\## Como Usar o Dashboard
-
-
-
-1\. Acesse a página `dashboard.html` (geralmente via link no rodapé do formulário ou diretamente pela URL).
-
-2\. O dashboard carrega automaticamente os dados do mês atual e futuros.
-
-3\. Utilize os filtros de \*\*Loja\*\* e \*\*Mês\*\* para refinar a visualização.
-
-4\. Clique em \*\*Exportar para Excel\*\* para baixar um relatório `.xlsx` com os dados filtrados.
-
-5\. As cores indicam a urgência:
-
-&#x20;  - 🔴 \*\*Vermelho:\*\* Vencimento no mês atual.
-
-&#x20;  - 🟡 \*\*Amarelo:\*\* Vencimento no próximo mês.
-
-&#x20;  - ⚪ \*\*Neutro:\*\* Vencimentos futuros.
-
-
-
-\---
-
-
-
-\## 📂 Estrutura de Arquivos
-
-
-
-```
-
+```text
 Controle-de-Vencimentos/
-
 ├── apps-script/
-
-│   └── Code.gs           # Lógica do backend (Google Apps Script)
-
+│   ├── Code.gs           # Backend completo + migração + utilitários
+│   └── appsscript.json   # Manifest (fuso America/Sao_Paulo, runtime V8)
 ├── assets/
-
-│   └── logo-cp-fani.png  # Logo da empresa
-
+│   └── logo-cp-fani.png  # Logo da empresa (VOCÊ deve adicionar este arquivo)
 ├── css/
-
-│   └── style.css         # Estilos globais e responsivos
-
+│   └── style.css         # Estilos globais, responsivos, AA e @media print
 ├── js/
-
-│   ├── config.js         # Configuração da URL da API
-
-│   ├── form.js           # Lógica do formulário
-
-│   └── dashboard.js      # Lógica do dashboard
-
-├── index.html            # Página do formulário
-
-├── dashboard.html        # Página do dashboard
-
+│   ├── config.js         # URL do Web App + apiRequest (timeout/retry) + helpers
+│   ├── form.js           # Formulário de registro (lotes)
+│   ├── produtos.js       # Cadastro de produtos
+│   ├── dashboard.js      # Dashboard + baixas
+│   └── relatorios.js     # Gráficos e relatórios
+├── index.html            # Registrar
+├── dashboard.html        # Dashboard
+├── produtos.html         # Produtos
+├── relatorios.html       # Relatórios
+├── netlify.toml          # Publish + cabeçalhos de segurança/CSP
+├── .gitignore            # Bloqueia planilhas, backups e segredos no repositório
 └── README.md             # Este arquivo
-
 ```
 
+> A pasta `assets/` com `logo-cp-fani.png` **precisa ser criada e commitada por você**.
+> Sem ela, o sistema funciona normalmente com o fallback de texto "CP FANI".
 
+---
 
-\---
+## Planilha (banco de dados)
 
+### Aba `Lojas`
 
+| Coluna | Cabeçalho | Conteúdo |
+| --- | --- | --- |
+| A | Nome da Loja | Texto (máx. 60 caracteres) |
 
-\*\*Desenvolvido para CP FANI.\*\*
+Linhas 2 em diante: as 17 lojas (ex.: Loja 01 … Loja 17).
 
+### Aba `Projetos` (cadastro de produtos)
+
+| Coluna | Cabeçalho | Conteúdo |
+| --- | --- | --- |
+| A | Código | Texto de 5 dígitos (zeros à esquerda preservados) |
+| B | Descrição | Texto (máx. 120) |
+| C | categoria | Texto (máx. 120) |
+| D | unidade | Texto (máx. 120) |
+| E | ativo | `SIM` ou `NÃO` |
+
+### Aba `Registros` (lotes)
+
+| Coluna | Cabeçalho | Conteúdo |
+| --- | --- | --- |
+| A | Data Registro | `yyyy-MM-dd HH:mm:ss` (fuso de São Paulo) |
+| B | Loja | Deve existir na aba `Lojas` |
+| C | Código Projeto | Texto de 5 dígitos |
+| D | Descrição | Preenchida pelo servidor a partir de `Projetos` |
+| E | Quantidade | Inteiro > 0 |
+| F | Mês Vencimento | `AAAA-MM` (nunca mês passado) |
+| G | id | `R000001`, `R000002`… (gerado automaticamente) |
+| H | Lote | Texto (máx. 20), opcional |
+| I | Status | `ATIVO` ou `BAIXADO` |
+| J | Atualizado em | Preenchido em somas e baixas |
+
+### Aba `Baixas` (histórico, criada pela migração)
+
+| Coluna | Cabeçalho | Conteúdo |
+| --- | --- | --- |
+| A | id_registro | ID da aba `Registros` |
+| B | data | `yyyy-MM-dd HH:mm:ss` |
+| C | loja | Texto |
+| D | codigo | Texto de 5 dígitos |
+| E | quantidade_baixada | Inteiro > 0 |
+| F | motivo | vendido, descartado, transferido ou vencido |
+| G | responsavel | Texto livre (máx. 80) |
+
+### Regras de negócio implementadas
+
+- **Código do projeto:** sempre TEXTO de exatamente 5 dígitos; zeros à esquerda são
+  válidos e preservados (`01234` ≠ `1234`). Nunca é tratado como número.
+- **Códigos duplicados em `Projetos`:** o sistema usa o **primeiro encontrado** (decisão
+  de negócio). Rode `listarCodigosDuplicados()` no editor do Apps Script para auditar.
+- **Duplicidade de lançamento:** mesma loja + código + lote + mês com status `ATIVO`
+  → o formulário pergunta se **soma** ou **cancela**; o servidor soma atomicamente.
+- **Baixas:** totais ou parciais; quando zera, o status vira `BAIXADO`.
+  **Nenhum registro é apagado em hipótese alguma.**
+- **Produtos:** inativar (`ativo = NÃO`) não apaga; o histórico permanece íntegro.
+
+---
+
+## Instalação do zero
+
+### 1. Planilha
+
+1. Crie uma planilha em sheets.google.com com as abas `Lojas`, `Projetos` e `Registros`
+   (a aba `Baixas` e os cabeçalhos novos são criados pela migração).
+2. Preencha `Lojas` e `Projetos` conforme as tabelas acima.
+
+### 2. Apps Script
+
+1. Na planilha: **Extensões > Apps Script**.
+2. Cole o conteúdo de `apps-script/Code.gs` e salve.
+3. Em **Configurações do projeto**, marque **Mostrar arquivo de manifestação** e cole o
+   conteúdo de `apps-script/appsscript.json` (fuso `America/Sao_Paulo`, runtime `V8`).
+4. **Implantar > Nova implantação > App da Web**:
+   - Executar como: **Eu**
+   - Quem pode acessar: **Qualquer pessoa**
+5. Autorize as permissões e copie a URL terminada em `/exec`.
+
+### 3. Front-end
+
+1. Em `js/config.js`, substitua `APPS_SCRIPT_URL` pela URL copiada.
+2. Coloque a logo em `assets/logo-cp-fani.png`.
+
+### 4. GitHub e Netlify
+
+1. Crie o repositório e envie os arquivos (`git add . && git commit && git push`).
+   O `.gitignore` impede o commit de planilhas e backups — **nunca force a entrada deles**.
+2. No Netlify: **Add new site > Import an existing project > GitHub**.
+   O `netlify.toml` já define publish na raiz e os cabeçalhos de segurança.
+
+---
+
+## Atualizar um sistema já em produção (migração da v1)
+
+1. **FAÇA UMA CÓPIA DA PLANILHA** (Arquivo > Fazer uma cópia). Sem exceções.
+2. Substitua o `Code.gs` no editor do Apps Script pelo novo e salve.
+3. Atualize o manifest (`appsscript.json`) conforme passo 2.3 acima.
+4. **Implantar > Gerenciar implantações > Editar (lápis) > Versão: "Nova versão" > Implantar.**
+   Isso mantém a MESMA URL `/exec`. Só use "Nova implantação" se quiser URL nova
+   (nesse caso atualize `js/config.js` e reimplemente o front).
+5. No editor, selecione a função `migrarPlanilha` e clique em **Executar**.
+   A migração é **idempotente** (pode rodar mais de uma vez): formata colunas de código,
+   mês e ID como texto; preenche `id` e `status` vazios; normaliza códigos para 5 dígitos;
+   cria cabeçalhos novos apenas onde estão vazios; cria a aba `Baixas` se não existir.
+   **Nenhuma linha é removida ou sobrescrita.**
+6. Selecione `listarCodigosDuplicados` e execute; confira o relatório em **Execução > Logs**.
+7. Publique o front-end atualizado no Netlify (push no repositório).
+
+---
+
+## Como usar
+
+### Registrar (`index.html`)
+
+Selecione a loja (o painel mostra os itens já lançados por ela), digite o código de
+5 dígitos (a descrição aparece automaticamente), lote opcional, quantidade e mês.
+- **Enviar Registro:** salva e limpa código/quantidade/mês (a loja fica memorizada no aparelho).
+- **Salvar e adicionar outro:** salva mantendo loja e mês, pronto para o próximo código.
+- Se já existir lote igual (loja+código+lote+mês), um modal pergunta **Somar** ou **Cancelar**.
+
+### Dashboard (`dashboard.html`)
+
+- Cartões: vencendo este mês, próximo mês, lojas com pendências e **vencidos não baixados**.
+- A seção vermelha lista itens de meses passados ainda `ATIVO` — eles não somem da tela.
+- Botão **Dar baixa** em cada linha (total ou parcial, com motivo e responsável).
+- Filtros por loja e mês; cores: vermelho = mês atual, amarelo = próximo mês.
+- **Exportar para Excel** gera `.xlsx` com os dados filtrados (inclui vencidos).
+
+### Produtos (`produtos.html`)
+
+- Criar, editar e inativar/reativar produtos; **exclusão não existe**.
+- Busca por código ou descrição; edição trava o código (ele é a chave).
+- **Importar Lista:** cole `código;descrição;categoria` (uma linha por produto);
+  linhas inválidas são reportadas com número da linha, sem interromper as demais.
+  Códigos colados sem zeros são normalizados (`1234` vira `01234`).
+
+### Relatórios (`relatorios.html`)
+
+- Barras: quantidade a vencer por mês e por loja. Rosca: distribuição por categoria.
+- Barras empilhadas: perdas (baixas) por motivo, por mês. Ranking: top 10 produtos.
+- Filtros de período (3/6/12 meses ou tudo), loja e categoria aplicados a todos os gráficos.
+- **Exportar Excel** (abas "A Vencer", "Baixas" e "Ranking") e **Imprimir / Salvar PDF**
+  com layout limpo e logo no topo.
+
+---
+
+## Segurança e limitações (leia com atenção)
+
+### Decisão de negócio: sistema ABERTO, sem login e sem PIN
+
+Qualquer pessoa que conheça a URL do Web App pode **ler e gravar dados**. Isso é aceito
+pela CP FANI como ferramenta interna. A URL está neste repositório público por necessidade
+do front-end. Se um dia houver abuso: gere URL nova (nova implantação) e/ou torne o
+repositório privado.
+
+### O que EXISTE de proteção
+
+- Validação 100% no servidor: código de 5 dígitos, loja existente em `Lojas`, descrição
+  vinda da aba `Projetos` (nunca do cliente), sanitização contra injeção de fórmula
+  (`=`, `+`, `-`, `@`), limites de tamanho por campo, mês nunca no passado
+  (fuso `America/Sao_Paulo`).
+- `LockService` em toda gravação; soma de duplicados atômica.
+- Front-end imune a XSS dos dados: renderização apenas com `textContent`/`createElement`.
+- Cabeçalhos no Netlify: CSP (scripts apenas do próprio site e das CDNs fixas),
+  `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
+  `Permissions-Policy` e HSTS.
+- `.gitignore` bloqueia planilhas, cópias e backups no repositório público.
+
+### O que NÃO existe (por decisão)
+
+- Login individual, perfis, trilha de auditoria por pessoa (baixas registram apenas o
+  campo livre `responsavel`), rate limit real e criptografia além do HTTPS.
+
+---
+
+## Limites e escala (Google Sheets / Apps Script)
+
+| Recurso | Limite prático (conta Google gratuita) |
+| --- | --- |
+| Células por planilha | 10 milhões |
+| Tempo máximo por execução | 6 minutos |
+| Tempo total de script por dia | 90 minutos |
+| Chamadas URL Fetch por dia | 20.000 |
+| Leituras do `doGet` | Lê TODOS os registros a cada chamada (cresce linearmente) |
+
+**Recomendações:**
+
+- Até cerca de **5.000–10.000 registros**, o `doGet` completo responde em poucos segundos.
+- Acima disso, prefira as rotas filtradas já existentes (`?action=registros&loja=X`) e
+  considere paginação server-side por mês.
+- **Quando migrar de banco:** acima de ~20.000 registros, `doGet` passando de 10–15 s,
+  ou estouro das cotas diárias. Nesse ponto, avalie Firestore/SQL com backend próprio.
+- Cotas podem mudar; consulte a documentação oficial de cotas do Apps Script.
+
+---
+
+## Troubleshooting
+
+| Sintoma | Causa provável / solução |
+| --- | --- |
+| Erro "Unexpected token '<'" ou página HTML de erro | Cota do Apps Script estourada ou implantação sem a nova versão. Publique **nova versão** e tente novamente. |
+| Código perdeu zeros à esquerda (`1234` no lugar de `01234`) | Coluna sem formato texto. Rode `migrarPlanilha()`. |
+| Filtro de mês não mostra nada | Coluna F convertida em Data pelo Sheets. Rode `migrarPlanilha()`. |
+| Logo não aparece | Falta `assets/logo-cp-fani.png`. O fallback de texto assume automaticamente. |
+| Navegador sem seletor de mês (Firefox antigo) | Fallback automático: campo de texto com máscara `AAAA-MM`. |
+| "Servidor ocupado. Tente novamente." | Dois gravadores simultâneos (`LockService`). Aguarde alguns segundos. |
+| Dashboard com dado velho | Ctrl+F5 (o Netlify serve `/js` e `/css` sem cache por segurança do rollout). |
+
+---
+
+**Desenvolvido para CP FANI.**
