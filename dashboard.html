@@ -13,10 +13,19 @@
   <!-- Estilos -->
   <link rel="stylesheet" href="css/style.css" />
 
-  <!-- SheetJS para exportação Excel -->
-  <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+  <!-- SheetJS para exportação Excel (versão fixa para segurança e reprodutibilidade) -->
+  <script
+    src="https://cdn.sheetjs.com/xlsx-0.18.5/package/dist/xlsx.full.min.js"
+    crossorigin="anonymous"
+  ></script>
 </head>
 <body>
+  <!-- Cabeçalho exclusivo de impressão (visível apenas no papel/PDF) -->
+  <div class="print-header">
+    <img src="assets/logo-cp-fani.png" alt="" />
+    <span class="print-titulo">CP FANI - Dashboard de Vencimentos</span>
+  </div>
+
   <!-- Cabeçalho -->
   <header class="header">
     <div class="header-container">
@@ -30,12 +39,25 @@
         <span id="logo-fallback" class="logo-fallback" style="display:none;">CP FANI</span>
       </div>
       <h1 class="header-title">Dashboard de Vencimentos</h1>
-      <a href="index.html" class="btn btn-secondary" style="margin-left: auto; text-decoration: none;">Voltar ao Formulário</a>
+
+      <!-- Menu de navegação consistente entre as páginas -->
+      <nav class="nav-menu" aria-label="Navegação principal">
+        <a href="index.html" class="nav-link">Registrar</a>
+        <a href="dashboard.html" class="nav-link ativo" aria-current="page">Dashboard</a>
+        <a href="produtos.html" class="nav-link">Produtos</a>
+        <a href="relatorios.html" class="nav-link">Relatórios</a>
+      </nav>
     </div>
   </header>
 
   <!-- Conteúdo principal -->
   <main class="main">
+    <noscript>
+      <div class="mensagem erro" style="display:block;">
+        Este sistema requer JavaScript habilitado para funcionar.
+      </div>
+    </noscript>
+
     <!-- Estado de Carregamento -->
     <div id="loading-state" class="estado-carregando">
       <div class="spinner-grande"></div>
@@ -44,9 +66,9 @@
 
     <!-- Conteúdo do Dashboard (oculto até carregar) -->
     <div id="dashboard-content" style="display: none;">
-      
+
       <!-- Cartões de Resumo -->
-      <section class="dashboard-resumo">
+      <section class="dashboard-resumo" aria-label="Resumo">
         <div class="cartao-resumo destaque-atual">
           <div class="cartao-titulo">Vencendo este mês</div>
           <div class="cartao-valor" id="summary-current">0</div>
@@ -58,6 +80,37 @@
         <div class="cartao-resumo destaque-lojas">
           <div class="cartao-titulo">Lojas com pendências</div>
           <div class="cartao-valor" id="summary-stores">0</div>
+        </div>
+        <div class="cartao-resumo destaque-vencidos">
+          <div class="cartao-titulo">Vencidos não baixados</div>
+          <div class="cartao-valor" id="summary-vencidos">0</div>
+        </div>
+      </section>
+
+      <!-- Seção de destaque: Vencidos não baixados (meses passados, status ATIVO) -->
+      <section id="secao-vencidos" class="secao-vencidos" hidden>
+        <h2 class="secao-vencidos-titulo">
+          ⚠ Vencidos não baixados
+        </h2>
+        <p class="section-subtitle" style="margin-bottom: var(--espacamento-sm);">
+          Itens de meses passados que ainda constam como ATIVOS. Dê baixa para manter o painel limpo.
+        </p>
+        <div class="dashboard-tabela-container">
+          <table class="dashboard-tabela">
+            <thead>
+              <tr>
+                <th>Loja</th>
+                <th>Código</th>
+                <th>Descrição</th>
+                <th>Quantidade</th>
+                <th>Mês vencido</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="secao-vencidos-body">
+              <!-- Preenchido via dashboard.js -->
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -74,25 +127,30 @@
           <input type="month" id="filter-month" />
         </div>
         <div class="acoes-dashboard">
-          <button id="btn-update" class="btn btn-secondary">Atualizar Dados</button>
-          <button id="btn-export" class="btn btn-primary">Exportar para Excel</button>
+          <button id="btn-update" type="button" class="btn btn-secondary">
+            Atualizar Dados
+          </button>
+          <button id="btn-export" type="button" class="btn btn-primary" style="width: auto;">
+            Exportar para Excel
+          </button>
         </div>
       </section>
 
-      <!-- Tabela de Dados -->
+      <!-- Tabela de Dados (mês atual e seguintes) -->
       <section class="dashboard-tabela-container">
         <table class="dashboard-tabela" id="data-table">
           <thead>
             <tr>
-              <th>Loja</th>
-              <th>Código</th>
-              <th>Descrição</th>
-              <th>Quantidade</th>
-              <th>Mês de Vencimento</th>
+              <th scope="col">Loja</th>
+              <th scope="col">Código</th>
+              <th scope="col">Descrição</th>
+              <th scope="col">Quantidade</th>
+              <th scope="col">Mês de Vencimento</th>
+              <th scope="col">Ações</th>
             </tr>
           </thead>
           <tbody id="table-body">
-            <!-- Linhas preenchidas via JS -->
+            <!-- Linhas preenchidas via dashboard.js -->
           </tbody>
         </table>
         <div id="empty-state" class="estado-vazio" style="display: none;">
@@ -100,6 +158,15 @@
         </div>
       </section>
     </div>
+
+    <!-- Mensagem de feedback global do dashboard -->
+    <div
+      id="mensagem-dashboard"
+      class="mensagem"
+      role="alert"
+      aria-live="assertive"
+      style="display:none;"
+    ></div>
   </main>
 
   <!-- Rodapé -->
@@ -109,7 +176,106 @@
     </p>
   </footer>
 
-  <!-- Scripts -->
+  <!-- Modal de dar baixa (total ou parcial) -->
+  <div
+    id="modal-baixa"
+    class="modal-overlay"
+    hidden
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-baixa-titulo"
+  >
+    <div class="modal">
+      <h3 id="modal-baixa-titulo" class="modal-titulo">Dar baixa</h3>
+
+      <div class="form-group">
+        <label for="modal-baixa-id" class="form-label">ID do registro</label>
+        <input
+          type="text"
+          id="modal-baixa-id"
+          class="form-input"
+          readonly
+          aria-readonly="true"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="modal-baixa-qtd-disponivel" class="form-label">Quantidade disponível</label>
+        <input
+          type="number"
+          id="modal-baixa-qtd-disponivel"
+          class="form-input"
+          readonly
+          aria-readonly="true"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="modal-baixa-quantidade" class="form-label">Quantidade a baixar</label>
+        <input
+          type="number"
+          id="modal-baixa-quantidade"
+          class="form-input"
+          min="1"
+          step="1"
+          inputmode="numeric"
+          placeholder="Quantas unidades dar baixa"
+          required
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="modal-baixa-motivo" class="form-label">Motivo</label>
+        <select id="modal-baixa-motivo" class="form-select" required>
+          <option value="">Selecione...</option>
+          <option value="vendido">Vendido</option>
+          <option value="descartado">Descartado</option>
+          <option value="transferido">Transferido</option>
+          <option value="vencido">Vencido</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="modal-baixa-responsavel" class="form-label opcional">Responsável</label>
+        <input
+          type="text"
+          id="modal-baixa-responsavel"
+          class="form-input"
+          maxlength="80"
+          autocomplete="off"
+          placeholder="Nome da pessoa (opcional)"
+        />
+      </div>
+
+      <div
+        id="modal-baixa-mensagem"
+        class="mensagem"
+        role="alert"
+        aria-live="assertive"
+        style="display:none;"
+      ></div>
+
+      <div class="modal-acoes">
+        <button
+          type="button"
+          id="btn-cancelar-baixa"
+          class="btn btn-secondary"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          id="btn-confirmar-baixa"
+          class="btn btn-danger"
+        >
+          <span id="btn-confirmar-baixa-texto">Confirmar Baixa</span>
+          <span id="btn-confirmar-baixa-loading" class="btn-loading" style="display:none;">Enviando...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts (ordem importa: config primeiro) -->
   <script src="js/config.js"></script>
   <script src="js/dashboard.js"></script>
 </body>
