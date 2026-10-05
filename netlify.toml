@@ -1,0 +1,62 @@
+# ============================================================
+# Controle de Vencimentos CP FANI - Configuração Netlify
+# Site 100% estático (HTML/CSS/JS puro): sem comando de build.
+# Publica a raiz do repositório.
+# ============================================================
+
+[build]
+  publish = "."
+  # Sem "command": não há build (bibliotecas via CDN com versão fixa)
+
+# ============================================================
+# Cabeçalhos de segurança (aplicados a todas as respostas)
+# ============================================================
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Impede que o site seja embutido em iframes (anti clickjacking)
+    X-Frame-Options = "DENY"
+
+    # Impede que o navegador "adivinhe" Content-Type (anti MIME sniffing)
+    X-Content-Type-Options = "nosniff"
+
+    # Controla vazamento de referrer para outros domínios
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+    # Desliga APIs de navegador que o sistema não usa
+    Permissions-Policy = "geolocation=(), camera=(), microphone=(), payment=()"
+
+    # HTTPS obrigatório (HSTS) - Netlify já serve apenas TLS
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains"
+
+    # Content-Security-Policy calibrada para o stack real do projeto:
+    # - script-src: apenas o próprio site + SheetJS (cdn.sheetjs.com) + Chart.js (cdn.jsdelivr.net)
+    # - script-src-attr: libera SOMENTE handlers inline de atributo (onerror do fallback da logo),
+    #   sem liberar blocos <script> inline (proteção anti-XSS mantida)
+    # - style-src 'unsafe-inline': necessário pelos style="display:none" do markup
+    # - connect-src: Apps Script (script.google.com) + o domínio de redirect das
+    #   respostas (googleusercontent.com), sem o qual todo fetch quebraria
+    # - img-src data:: seta do select em style.css é um data: URI
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.sheetjs.com https://cdn.jsdelivr.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://script.google.com https://*.googleusercontent.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+
+# ============================================================
+# Cache: logo e assets podem ter cache curto (muda raramente)
+# ============================================================
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, must-revalidate"
+
+# ============================================================
+# Cache: CSS/JS sem cache agressivo durante o rollout das correções
+# (evita loja ficando com versão velha de form.js/dashboard.js)
+# ============================================================
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "no-cache"
