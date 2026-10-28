@@ -357,6 +357,14 @@ function renderGraficoLoja() {
   const lojas = Object.keys(porLoja).sort((a, b) => porLoja[b] - porLoja[a]);
   const valores = lojas.map(l => porLoja[l]);
 
+  // U6: Ajusta a altura do gráfico proporcionalmente ao número de lojas
+  const canvas = document.getElementById('chart-loja');
+  if (canvas && canvas.parentNode) {
+    // Mínimo de 280px, crescendo 35px por loja para não espremer as barras
+    const alturaCalculada = Math.max(280, lojas.length * 35);
+    canvas.parentNode.style.height = alturaCalculada + 'px';
+  }
+
   const config = {
     type: 'bar',
     data: {
@@ -637,7 +645,8 @@ function exportarExcel() {
     XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
   }
 
-  const dataAtual = new Date().toISOString().split('T')[0];
+  // U3: Data local em vez de UTC
+  const dataAtual = obterDataLocalStr();
   XLSX.writeFile(wb, 'relatorios_cp_fani_' + dataAtual + '.xlsx');
 }
 
@@ -685,4 +694,15 @@ function addMonthsStr(base, delta) {
 function formatarMesBR(mes) {
   if (!/^\d{4}-\d{2}$/.test(mes || '')) return mes || '';
   return mes.slice(5, 7) + '/' + mes.slice(0, 4);
+}
+
+/**
+ * U3: Retorna a data atual no formato AAAA-MM-DD (horário local)
+ */
+function obterDataLocalStr() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoje.getDate()).padStart(2, '0');
+  return ano + '-' + mes + '-' + dia;
 }
