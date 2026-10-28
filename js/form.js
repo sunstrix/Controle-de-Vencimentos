@@ -47,6 +47,9 @@ let painelEntradas = []; // { item, li, spanAviso } para destaque de soma
 let modoSalvarOutro = false;
 let elBtnTentar = null;
 
+// U2: Controle de requisições do painel para evitar condição de corrida
+let painelRequestId = 0;
+
 // ============================================================
 // 2. INICIALIZAÇÃO
 // ============================================================
@@ -71,6 +74,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   elMes.addEventListener('change', atualizarDestaqueSoma);
   elMes.addEventListener('input', atualizarDestaqueSoma);
+  
+  // A7: Mantidos como fallback, mas a lógica principal será via e.submitter no submit
   elBtnEnviar.addEventListener('click', () => { modoSalvarOutro = false; });
   elBtnOutro.addEventListener('click', () => { modoSalvarOutro = true; });
 
@@ -102,21 +107,22 @@ function aplicarFallbackMonth() {
 }
 
 // ============================================================
-// 4. CARREGAMENTO DE DADOS (GET legado via apiRequest)
+// 4. CARREGAMENTO DE DADOS (GET via apiGetBase - P1)
 // ============================================================
 async function carregarDadosIniciais() {
   mostrarEstadoCarregamento(true);
   esconderBotaoTentar();
 
   try {
-    const data = await apiGetTudo();
+    // P1: Usa a rota base (lojas + produtos) em vez de baixar todos os registros
+    const data = await apiGetBase();
 
     if (!data.ok) {
       throw new Error(data.mensagem || 'Erro ao carregar dados do servidor.');
     }
 
-    // Popular cache
-    projetosCache = data.projetos || {};
+    // Popular cache (produtos agora é um dicionário de objetos)
+    projetosCache = data.produtos || {};
     lojasCache = data.lojas || [];
 
     // Popular select de lojas e restaurar última loja usada
@@ -206,10 +212,11 @@ elCodigo.addEventListener('input', (e) => {
     return;
   }
 
-  const descricao = projetosCache[valorLimpo];
+  // P1: Projetos agora é um objeto { descricao, categoria, unidade, ativo }
+  const produto = projetosCache[valorLimpo];
 
-  if (descricao) {
-    elDescricao.textContent = 'Descrição: ' + descricao;
+  if (produto && produto.descricao) {
+    elDescricao.textContent = 'Descrição: ' + produto.descricao;
     elDescricao.className = 'form-hint encontrado';
   } else {
     elDescricao.textContent = '⚠️ Código não cadastrado. A descrição será gravada como "Código não cadastrado".';
@@ -228,7 +235,13 @@ async function carregarPainelLoja(loja) {
     return;
   }
 
+  // U2: Cria um identificador para esta requisição
+  const currentRequestId = ++painelRequestId;
+
   const data = await apiGetRegistrosPorLoja(loja);
+
+  // U2: Se outra loja foi selecionada enquanto esta requisição estava em andamento, ignora
+  if (currentRequestId !== painelRequestId) return;
 
   if (!data.ok) {
     // Falha no painel não bloqueia o formulário: apenas oculta
@@ -314,7 +327,9 @@ function renderPainel() {
 function atualizarDestaqueSoma() {
   const codigo = elCodigo.value.replace(/\D/g, '').slice(0, 5);
   const mes = elMes.value;
-  const lote = elLote ? elLote.value.trim() : '';
+  
+  // U4: Normaliza o lote da mesma forma que o servidor
+  const lote = sanitizeText(elLote ? elLote.value : '');
 
   painelEntradas.forEach(entrada => {
     const coincide =
@@ -407,6 +422,11 @@ function confirmarSoma(item, qtdNova) {
 elForm.addEventListener('submit', async (e) => {
   e.preventDefault();
 
+  // A7: Determina o modo correto com base no botão que disparou o submit
+  if (e.submitter) {
+    modoSalvarOutro = (e.submitter === elBtnOutro);
+  }
+
   // --- Validações client-side ---
   const loja = elLoja.value;
   if (!loja) {
@@ -436,9 +456,10 @@ elForm.addEventListener('submit', async (e) => {
     return;
   }
 
-  const lote = elLote ? elLote.value.trim() : '';
+  // U4: Normaliza o lote
+  const lote = sanitizeText(elLote ? elLote.value : '');
 
-  // --- Duplicidade: pergunta se soma ou cancela ---
+  // --- Duplicidade Local (aviso prévio) ---
   const itemExistente = painelCache.find(item =>
     item.codigo_projeto === codigo &&
     item.mes_vencimento === mes &&
@@ -453,21 +474,53 @@ elForm.addEventListener('submit', async (e) => {
     }
   }
 
-  // --- Payload (descrição é resolvida no servidor; não confiamos no cliente) ---
+  // A4: Gera ID de requisição para idempotência
+  const requestId = gerarRequestId();
+
+  // --- Payload ---
   const payload = {
     loja: loja,
     codigo_projeto: codigo,
     quantidade: qtd,
     mes_vencimento: mes,
-    lote: lote
+    lote: lote,
+    request_id: requestId
   };
+
+  // Se o painel local já detectou, enviamos a confirmação de antemão (para compatibilidade)
+  if (itemExistente) {
+    payload.confirmar_soma = true;
+  }
 
   // Bloquear botões e mostrar loading
   setarEstadoBotoes(true);
   esconderMensagem();
 
   try {
-    const data = await apiRegistrarLote(payload);
+    let data = await apiRegistrarLote(payload);
+
+    // A6: Tratamento de duplicidade detectada pelo servidor
+    if (!data.ok && data.codigo === 'DUPLICADO') {
+      const itemServidor = {
+        codigo_projeto: codigo,
+        descricao_projeto: projetosCache[codigo] ? projetosCache[codigo].descricao : 'Código não cadastrado',
+        mes_vencimento: mes,
+        lote: lote,
+        quantidade: data.existente.quantidade
+      };
+      
+      const confirmar = await confirmarSoma(itemServidor, qtd);
+      if (!confirmar) {
+        mostrarMensagem('Envio cancelado. Nenhum registro foi alterado.', 'aviso');
+        setarEstadoBotoes(false);
+        return;
+      }
+
+      // Reenvia com confirmação e novo request_id
+      payload.confirmar_soma = true;
+      payload.request_id = gerarRequestId();
+      data = await apiRegistrarLote(payload);
+    }
 
     if (data.ok) {
       mostrarMensagem(data.mensagem || 'Registro salvo com sucesso!', 'sucesso');
@@ -515,8 +568,21 @@ function posSucesso() {
 }
 
 // ============================================================
-// 10. FUNÇÕES AUXILIARES DE UI
+// 10. FUNÇÕES AUXILIARES DE UI E SEGURANÇA
 // ============================================================
+
+/**
+ * U4: Espelha a função sanitizeText do backend para consistência de lote.
+ */
+function sanitizeText(text) {
+  if (!text) return '';
+  let s = String(text).trim();
+  while (s.length > 0 && /^[=+\-@]/.test(s)) {
+    s = s.substring(1);
+  }
+  return s;
+}
+
 function setarEstadoBotoes(loading) {
   elBtnEnviar.disabled = loading;
   elBtnOutro.disabled = loading;
