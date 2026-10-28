@@ -12,6 +12,7 @@
  * - Código sempre texto de 5 dígitos (zeros à esquerda preservados via padStart).
  * - Inativação mantém o produto no histórico (aba "Registros" intacta).
  * - Importação normaliza códigos colados sem zeros ("1234" vira "01234").
+ * - Importação em lote (P2) com preservação de unidade e status ativo (A2).
  *
  * Segurança de renderização: NENHUM dado vindo do servidor é inserido via innerHTML.
  */
@@ -49,6 +50,7 @@ let codigoEmEdicao = null;
 
 // Limite de segurança para importação colada
 const LIMITE_IMPORTACAO = 500;
+const TAMANHO_LOTE = 50; // P2: Tamanho do lote para envio em bloco
 
 // ============================================================
 // 2. INICIALIZAÇÃO
@@ -453,11 +455,12 @@ async function importarColados() {
 
   setLoadingImportar(true);
   esconderMensagem();
-  elImportRelatorio.textContent = 'Processando importação...';
+  elImportRelatorio.textContent = 'Validando dados...';
 
-  const sucessos = [];
+  const validos = [];
   const falhas = [];
 
+  // --- 1. Validação inicial de todas as linhas ---
   for (let i = 0; i < linhas.length; i++) {
     const numeroLinha = i + 1;
     const linha = linhas[i];
@@ -491,23 +494,98 @@ async function importarColados() {
       continue;
     }
 
-    const data = await apiSalvarProduto({
-      codigo: codigo,
-      descricao: descricao,
-      categoria: categoria,
-      unidade: '',
-      ativo: 'SIM'
-    });
+    // A2 / Q4: Preserva unidade e ativo se o produto já existir
+    const produtoExistente = produtosCache.find(p => p.codigo === codigo);
+    const unidade = produtoExistente ? (produtoExistente.unidade || '') : '';
+    const ativo = produtoExistente ? (produtoExistente.ativo || 'SIM') : 'SIM';
 
-    if (data.ok) {
-      sucessos.push('Linha ' + numeroLinha + ': código ' + codigo + ' (' + descricao + ') salvo.');
-    } else {
-      falhas.push('Linha ' + numeroLinha + ': ' + (data.mensagem || 'erro desconhecido.'));
-    }
+    validos.push({
+      numeroLinha: numeroLinha,
+      dados: {
+        codigo: codigo,
+        descricao: descricao,
+        categoria: categoria,
+        unidade: unidade,
+        ativo: ativo
+      }
+    });
   }
 
-  // Relatório final
-  let relatorio = 'Importação concluída: ' + sucessos.length + ' de ' + linhas.length + ' linha(s) salva(s).';
+  if (validos.length === 0) {
+    setLoadingImportar(false);
+    elImportRelatorio.textContent = 'Nenhuma linha válida para importar.\n\nFalhas:\n' + falhas.join('\n');
+    mostrarMensagem('Nenhuma linha válida para importar.', 'erro');
+    return;
+  }
+
+  // --- 2. Envio em Lotes (P2) com Barra de Progresso ---
+  const totalLotes = Math.ceil(validos.length / TAMANHO_LOTE);
+  
+  // Cria a barra de progresso dinamicamente se não existir
+  let progressoBar = document.getElementById('barra-progresso-importacao');
+  if (!progressoBar) {
+    progressoBar = document.createElement('progress');
+    progressoBar.id = 'barra-progresso-importacao';
+    progressoBar.max = validos.length;
+    progressoBar.value = 0;
+    progressoBar.style.width = '100%';
+    progressoBar.style.marginTop = '10px';
+    elImportRelatorio.parentNode.insertBefore(progressoBar, elImportRelatorio);
+  } else {
+    progressoBar.max = validos.length;
+    progressoBar.value = 0;
+  }
+
+  let sucessos = 0;
+
+  for (let i = 0; i < validos.length; i += TAMANHO_LOTE) {
+    const loteAtual = validos.slice(i, i + TAMANHO_LOTE);
+    const loteNum = Math.floor(i / TAMANHO_LOTE) + 1;
+    
+    elImportRelatorio.textContent = `Processando lote ${loteNum} de ${totalLotes}...`;
+
+    try {
+      const payload = { produtos: loteAtual.map(v => v.dados) };
+      const data = await apiSalvarProdutosLote(payload);
+
+      if (data.ok) {
+        data.resultados.forEach((res, index) => {
+          const linhaOriginal = loteAtual[index].numeroLinha;
+          const codigoOriginal = loteAtual[index].dados.codigo;
+
+          if (res.status === 'erro') {
+            falhas.push('Linha ' + linhaOriginal + ': ' + (res.mensagem || 'erro desconhecido.'));
+          } else if (res.status === 'criado') {
+            sucessos++;
+            // Opcional: poderia logar o sucesso detalhado, mas o relatório final já resume
+          } else if (res.status === 'atualizado') {
+            sucessos++;
+          }
+        });
+      } else {
+        // Se o lote falhar inteiro
+        loteAtual.forEach(v => {
+          falhas.push('Linha ' + v.numeroLinha + ': ' + (data.mensagem || 'erro de rede.'));
+        });
+      }
+    } catch (err) {
+      // Falha de rede no lote inteiro
+      loteAtual.forEach(v => {
+        falhas.push('Linha ' + v.numeroLinha + ': ' + (err.message || 'erro de conexão.'));
+      });
+    }
+    
+    // Atualiza a barra de progresso
+    progressoBar.value = Math.min(i + TAMANHO_LOTE, validos.length);
+  }
+
+  // Remove a barra de progresso
+  if (progressoBar.parentNode) {
+    progressoBar.parentNode.removeChild(progressoBar);
+  }
+
+  // --- 3. Relatório final ---
+  let relatorio = 'Importação concluída: ' + sucessos + ' de ' + validos.length + ' linha(s) processada(s).';
   if (falhas.length > 0) {
     relatorio += '\n\nFalhas:\n' + falhas.join('\n');
   }
@@ -518,7 +596,7 @@ async function importarColados() {
     mostrarMensagem('Todos os produtos foram importados com sucesso!', 'sucesso');
   } else {
     mostrarMensagem(
-      'Importação parcial: ' + sucessos.length + ' salva(s), ' + falhas.length + ' falha(s). Veja o relatório abaixo.',
+      'Importação parcial: ' + sucessos + ' salva(s), ' + falhas.length + ' falha(s). Veja o relatório abaixo.',
       'aviso'
     );
   }
