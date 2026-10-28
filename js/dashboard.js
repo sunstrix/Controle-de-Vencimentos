@@ -69,11 +69,15 @@ document.addEventListener('DOMContentLoaded', () => {
   if (elFilterMonth.type === 'month') {
     elFilterMonth.setAttribute('min', mesAtualStr());
   }
+  
+  // Q1: O padrão visual é "Mês atual", mas a tabela mostrará os 3 meses
   elFilterMonth.value = mesAtualStr();
 
   elFilterStore.addEventListener('change', aplicarFiltros);
   elFilterMonth.addEventListener('change', aplicarFiltros);
-  elBtnUpdate.addEventListener('click', recarregarDados);
+  
+  // U1: Botão atualizar mantém a tela visível
+  elBtnUpdate.addEventListener('click', () => recarregarDados(false)); 
   elBtnExport.addEventListener('click', exportarExcel);
 
   elBtnCancelarBaixa.addEventListener('click', fecharModalBaixa);
@@ -89,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  carregarDados();
+  carregarDados(false);
 });
 
 // ============================================================
@@ -116,16 +120,18 @@ function aplicarFallbackMonth() {
 // ============================================================
 // 5. CARREGAMENTO DE DADOS (GET legado via apiGetTudo)
 // ============================================================
-async function carregarDados() {
-  mostrarLoading(true);
-  esconderMensagem();
+async function carregarDados(background = false) {
+  if (!background) {
+    mostrarLoading(true);
+    esconderMensagem();
+  }
 
   const data = await apiGetTudo();
 
   if (!data.ok) {
     console.error('Erro no carregamento:', data.mensagem);
     mostrarMensagem(data.mensagem || CONFIG.MENSAGENS.ERRO_CONEXAO, 'erro');
-    mostrarLoading(false);
+    if (!background) mostrarLoading(false);
     return;
   }
 
@@ -134,17 +140,23 @@ async function carregarDados() {
 
   popularFiltroLojas(lojasCache);
   aplicarFiltros();
-  mostrarLoading(false);
+  
+  if (!background) {
+    mostrarLoading(false);
+  }
 }
 
-function recarregarDados() {
-  carregarDados();
+function recarregarDados(background = false) {
+  carregarDados(background);
 }
 
 // ============================================================
 // 6. FILTRO DE LOJAS (sem innerHTML)
 // ============================================================
 function popularFiltroLojas(lojas) {
+  // Preserva a seleção atual, se houver
+  const lojaSelecionada = elFilterStore.value;
+
   while (elFilterStore.firstChild) {
     elFilterStore.removeChild(elFilterStore.firstChild);
   }
@@ -161,6 +173,11 @@ function popularFiltroLojas(lojas) {
     option.textContent = loja;
     elFilterStore.appendChild(option);
   });
+
+  // Restaura seleção se ainda existir
+  if (lojaSelecionada && lojas.indexOf(lojaSelecionada) !== -1) {
+    elFilterStore.value = lojaSelecionada;
+  }
 }
 
 // ============================================================
@@ -193,32 +210,55 @@ function aplicarFiltros() {
   const mesFiltro = elFilterMonth.value;
   const atual = mesAtualStr();
   const proximo = mesProximoStr();
+  const anterior = mesAnteriorStr();
 
   const grupos = separarRegistros(registrosCache);
 
-  // Filtros aplicados apenas sobre futuros (meses atuais e seguintes)
-  let futurosFiltrados = grupos.futuros.slice();
-  if (lojaFiltro) {
-    futurosFiltrados = futurosFiltrados.filter(reg => reg.loja === lojaFiltro);
-  }
-  if (mesFiltro) {
-    futurosFiltrados = futurosFiltrados.filter(reg => reg.mes_vencimento === mesFiltro);
+  // --- Tabela Principal (A1 / Q1) ---
+  let registrosTabela = [];
+  
+  if (mesFiltro === atual) {
+    // Se o filtro estiver no mês atual (padrão), mostra 3 meses: anterior, atual, próximo
+    registrosTabela = grupos.futuros.concat(grupos.vencidos).filter(reg => {
+      return reg.mes_vencimento === anterior || 
+             reg.mes_vencimento === atual || 
+             reg.mes_vencimento === proximo;
+    });
+  } else if (mesFiltro) {
+    // Se o usuário mudar o filtro manualmente, respeita apenas o mês escolhido
+    registrosTabela = grupos.futuros.filter(reg => reg.mes_vencimento === mesFiltro);
+  } else {
+    // Se o filtro for limpo, mostra todos os futuros
+    registrosTabela = grupos.futuros.slice();
   }
 
-  futurosFiltrados.sort((a, b) => {
+  if (lojaFiltro) {
+    registrosTabela = registrosTabela.filter(reg => reg.loja === lojaFiltro);
+  }
+
+  registrosTabela.sort((a, b) => {
     if (a.loja !== b.loja) return a.loja.localeCompare(b.loja, 'pt-BR');
     return a.mes_vencimento.localeCompare(b.mes_vencimento);
   });
 
-  // Vencidos não filtrados por mês (sempre todos), mas filtrados por loja
+  // --- Vencidos não filtrados por mês (sempre todos), mas filtrados por loja ---
   let vencidosFiltrados = grupos.vencidos.slice();
   if (lojaFiltro) {
     vencidosFiltrados = vencidosFiltrados.filter(reg => reg.loja === lojaFiltro);
   }
   vencidosFiltrados.sort((a, b) => a.mes_vencimento.localeCompare(b.mes_vencimento));
 
-  atualizarResumo(futurosFiltrados, vencidosFiltrados, atual, proximo);
-  renderTabela(futurosFiltrados, atual, proximo);
+  // --- Cartões de Resumo (A1) ---
+  // Calculados apenas com o filtro de loja, independentes do filtro de mês
+  let futurosParaResumo = grupos.futuros.slice();
+  let vencidosParaResumo = grupos.vencidos.slice();
+  if (lojaFiltro) {
+    futurosParaResumo = futurosParaResumo.filter(reg => reg.loja === lojaFiltro);
+    vencidosParaResumo = vencidosParaResumo.filter(reg => reg.loja === lojaFiltro);
+  }
+
+  atualizarResumo(futurosParaResumo, vencidosParaResumo, atual, proximo);
+  renderTabela(registrosTabela, atual, proximo);
   renderVencidos(vencidosFiltrados);
 }
 
@@ -288,6 +328,10 @@ function renderTabela(registros, atual, proximo) {
       classeStatus = 'linha-mes-seguinte';
       badgeClass = 'badge-seguinte';
       badgeText = 'Próximo mês';
+    } else if (reg.mes_vencimento < atual) {
+      classeStatus = 'linha-vencido';
+      badgeClass = 'badge-vencido';
+      badgeText = 'Vencido';
     }
 
     const tr = document.createElement('tr');
@@ -482,7 +526,8 @@ async function confirmarBaixa() {
   if (data.ok) {
     mostrarMensagem(data.mensagem || 'Baixa registrada com sucesso.', 'sucesso');
     fecharModalBaixa();
-    recarregarDados();
+    // U1: Recarrega em background mantendo a tela e a mensagem visíveis
+    recarregarDados(true); 
   } else {
     mostrarModalMensagem(data.mensagem || 'Erro ao registrar baixa.', 'erro');
   }
@@ -505,28 +550,42 @@ function exportarExcel() {
   const lojaFiltro = elFilterStore.value;
   const mesFiltro = elFilterMonth.value;
   const atual = mesAtualStr();
+  const proximo = mesProximoStr();
+  const anterior = mesAnteriorStr();
 
   const grupos = separarRegistros(registrosCache);
 
-  // Exporta tanto futuros filtrados quanto vencidos filtrados (visão completa)
+  // Exporta os mesmos dados que estão na tela (Tabela + Vencidos)
   let dadosExport = [];
 
-  // Futuros aplicados aos filtros (como na tela)
-  let futurosFiltrados = grupos.futuros.slice();
-  if (lojaFiltro) {
-    futurosFiltrados = futurosFiltrados.filter(reg => reg.loja === lojaFiltro);
+  let registrosTabela = [];
+  if (mesFiltro === atual) {
+    registrosTabela = grupos.futuros.concat(grupos.vencidos).filter(reg => {
+      return reg.mes_vencimento === anterior || reg.mes_vencimento === atual || reg.mes_vencimento === proximo;
+    });
+  } else if (mesFiltro) {
+    registrosTabela = grupos.futuros.filter(reg => reg.mes_vencimento === mesFiltro);
+  } else {
+    registrosTabela = grupos.futuros.slice();
   }
-  if (mesFiltro) {
-    futurosFiltrados = futurosFiltrados.filter(reg => reg.mes_vencimento === mesFiltro);
-  }
-  dadosExport = dadosExport.concat(futurosFiltrados);
 
-  // Vencidos sempre incluídos (filtrados apenas por loja)
+  if (lojaFiltro) {
+    registrosTabela = registrosTabela.filter(reg => reg.loja === lojaFiltro);
+  }
+  dadosExport = dadosExport.concat(registrosTabela);
+
   let vencidosFiltrados = grupos.vencidos.slice();
   if (lojaFiltro) {
     vencidosFiltrados = vencidosFiltrados.filter(reg => reg.loja === lojaFiltro);
   }
   dadosExport = dadosExport.concat(vencidosFiltrados);
+
+  // Remove duplicados (para não exportar o mês anterior duas vezes)
+  const mapDados = new Map();
+  dadosExport.forEach(reg => {
+    if (reg.id) mapDados.set(reg.id, reg);
+  });
+  dadosExport = Array.from(mapDados.values());
 
   if (dadosExport.length === 0) {
     alert('Não há dados para exportar com os filtros atuais.');
@@ -569,7 +628,8 @@ function exportarExcel() {
 
   XLSX.utils.book_append_sheet(wb, ws, 'Vencimentos');
 
-  const dataAtual = new Date().toISOString().split('T')[0];
+  // U3: Data local em vez de UTC
+  const dataAtual = obterDataLocalStr();
   const nomeArquivo = 'vencimentos_cp_fani_' + dataAtual + '.xlsx';
 
   XLSX.writeFile(wb, nomeArquivo);
@@ -615,7 +675,24 @@ function mesProximoStr() {
   return prox.getFullYear() + '-' + String(prox.getMonth() + 1).padStart(2, '0');
 }
 
+function mesAnteriorStr() {
+  const hoje = new Date();
+  const ant = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  return ant.getFullYear() + '-' + String(ant.getMonth() + 1).padStart(2, '0');
+}
+
 function formatarMesBR(mes) {
   if (!/^\d{4}-\d{2}$/.test(mes || '')) return mes || '';
   return mes.slice(5, 7) + '/' + mes.slice(0, 4);
+}
+
+/**
+ * U3: Retorna a data atual no formato AAAA-MM-DD (horário local)
+ */
+function obterDataLocalStr() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoje.getDate()).padStart(2, '0');
+  return ano + '-' + mes + '-' + dia;
 }
