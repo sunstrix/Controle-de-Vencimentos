@@ -22,6 +22,9 @@ const CONFIG = {
 
   // Tempo máximo de espera por requisição (ms) — usado pelo AbortController
   TIMEOUT: 15000,
+  
+  // A4: Tempo máximo de espera para POST (cold start do Apps Script pode demorar)
+  TIMEOUT_POST: 30000,
 
   // Número máximo de tentativas em caso de falha de rede
   MAX_RETRIES: 2,
@@ -46,11 +49,27 @@ const CONFIG = {
     REGISTROS: "registros", // GET ?action=registros&loja=X
     PRODUTOS: "produtos",   // GET ?action=produtos
     BAIXAS: "baixas",       // GET ?action=baixas
+    BASE: "base",           // GET ?action=base (P1)
     REGISTRAR: "registrar", // POST (padrão)
     SALVAR_PRODUTO: "salvarProduto",
+    SALVAR_PRODUTOS_LOTE: "salvarProdutosLote", // P2
     DAR_BAIXA: "darBaixa"
   }
 };
+
+// ============================================================
+// HELPERS DE CONTROLE E SEGURANÇA (A4)
+// ============================================================
+
+/**
+ * Gera um UUID v4 simples para idempotência (request_id)
+ */
+function gerarRequestId() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 // ============================================================
 // HELPER DE URL
@@ -102,12 +121,14 @@ async function apiRequest(action, body, extraParams) {
   var isPost = !!body;
   var url = buildUrl(action, extraParams);
   var lastError = null;
-  var attempts = isPost ? 1 : (CONFIG.MAX_RETRIES + 1); // POST não tem retry (evita duplicação)
+  var attempts = isPost ? 1 : (CONFIG.MAX_RETRIES + 1); // POST não tem retry automático (idempotência manual)
   var mensagens = CONFIG.MENSAGENS;
 
   for (var tentativa = 1; tentativa <= attempts; tentativa++) {
     var controller = new AbortController();
-    var timeoutId = setTimeout(function () { controller.abort(); }, CONFIG.TIMEOUT);
+    // A4: Timeout estendido para POST (cold start)
+    var tempoTimeout = isPost ? CONFIG.TIMEOUT_POST : CONFIG.TIMEOUT;
+    var timeoutId = setTimeout(function () { controller.abort(); }, tempoTimeout);
 
     try {
       var fetchOptions = {
@@ -208,6 +229,13 @@ function apiGetTudo() {
 }
 
 /**
+ * P1: GET base (lojas + produtos simplificados) — ideal para o formulário
+ */
+function apiGetBase() {
+  return apiRequest(CONFIG.ACOES.BASE);
+}
+
+/**
  * GET registros de uma loja específica (painel R1 do formulário)
  */
 function apiGetRegistrosPorLoja(loja) {
@@ -240,6 +268,13 @@ function apiRegistrarLote(payload) {
  */
 function apiSalvarProduto(payload) {
   return apiRequest(CONFIG.ACOES.SALVAR_PRODUTO, payload);
+}
+
+/**
+ * P2: POST salvar produtos em lote
+ */
+function apiSalvarProdutosLote(payload) {
+  return apiRequest(CONFIG.ACOES.SALVAR_PRODUTOS_LOTE, payload);
 }
 
 /**
