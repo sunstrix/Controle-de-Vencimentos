@@ -8,10 +8,12 @@
  * - registros?loja=X: retorna registros de uma loja específica (painel R1)
  * - produtos: retorna lista completa de produtos (para produtos.html)
  * - baixas: retorna histórico de baixas
+ * - base: retorna lojas + produtos simplificados (cache 5 min)
  * 
  * Rotas POST (via campo "action" no payload):
  * - Sem action ou "registrar": registra/soma lote (legado + novo)
  * - salvarProduto: cria/edita/inativa produto
+ * - salvarProdutosLote: cria/edita produtos em lote (até 50 por vez)
  * - darBaixa: registra baixa total/parcial
  * 
  * ⚠️ ANTES DE RODAR A MIGRAÇÃO: faça uma cópia da planilha (Arquivo > Fazer cópia)
@@ -121,7 +123,11 @@ function getSheetData(sheet, numCols) {
  * @param {Object} nomes - mapa { numeroDaColuna: 'nomeDoCabecalho' }
  */
 function garantirCabecalhos(sheet, nomes) {
-  var linhaCabecalho = sheet.getRange(1, 1, 1, Math.max(sheet.getMaxColumns(), 10)).getValues()[0];
+  // P3: Limita leitura ao máximo de colunas existente para evitar erro de range
+  var maxCols = sheet.getMaxColumns();
+  var colunasParaLer = Math.min(maxCols, 10); 
+  var linhaCabecalho = sheet.getRange(1, 1, 1, colunasParaLer).getValues()[0];
+  
   for (var col in nomes) {
     if (!nomes.hasOwnProperty(col)) continue;
     var c = Number(col);
@@ -156,6 +162,17 @@ function garantirAbaBaixas(ss) {
   return sheet;
 }
 
+/**
+ * Invalida o cache da rota base para forçar atualização
+ */
+function invalidarCacheBase() {
+  try {
+    CacheService.getScriptCache().remove('base_data');
+  } catch (e) {
+    // Ignora erro se o cache não estiver disponível
+  }
+}
+
 // ============================================================
 // GET
 // ============================================================
@@ -177,6 +194,11 @@ function doGet(e) {
     // Rota aditiva: histórico de baixas
     if (action === 'baixas') {
       return doGetBaixas();
+    }
+
+    // Rota aditiva P1: dados base (lojas + produtos) com cache
+    if (action === 'base') {
+      return doGetBase();
     }
     
     // GET legado (sem action): retorna tudo para compatibilidade
@@ -220,6 +242,7 @@ function doGetLegado() {
     var categoria = String(row[2] || '').trim();
     var unidade = String(row[3] || '').trim();
     var ativo = String(row[4] || 'SIM').trim().toUpperCase();
+    if (ativo === 'NAO') ativo = 'NÃO';
     if (ativo !== 'SIM' && ativo !== 'NÃO') ativo = 'SIM';
     
     var produto = {
@@ -277,6 +300,57 @@ function doGetLegado() {
     projetos: projetos,
     registros: registros
   });
+}
+
+/**
+ * GET aditivo P1: retorna lojas + produtos simplificados (cache 5 min)
+ */
+function doGetBase() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('base_data');
+  if (cached) {
+    return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetLojas = ss.getSheetByName('Lojas');
+  var sheetProjetos = ss.getSheetByName('Projetos');
+
+  // 1. Lojas
+  var lojasRaw = getSheetData(sheetLojas, 1);
+  var lojas = [];
+  var lojasSet = {};
+  lojasRaw.forEach(function(row) {
+    var v = String(row[0] || '').trim();
+    if (v && !lojasSet[v]) {
+      lojasSet[v] = true;
+      lojas.push(v);
+    }
+  });
+
+  // 2. Produtos (dicionário)
+  var projetosRaw = getSheetData(sheetProjetos, 5);
+  var produtos = {};
+  projetosRaw.forEach(function(row) {
+    var codigo = normalizeCodigo(row[0]);
+    if (!codigo) return;
+    if (!produtos.hasOwnProperty(codigo)) {
+      var ativo = String(row[4] || 'SIM').trim().toUpperCase();
+      if (ativo === 'NAO') ativo = 'NÃO';
+      if (ativo !== 'SIM' && ativo !== 'NÃO') ativo = 'SIM';
+      
+      produtos[codigo] = {
+        descricao: String(row[1] || '').trim(),
+        categoria: String(row[2] || '').trim(),
+        unidade: String(row[3] || '').trim(),
+        ativo: ativo
+      };
+    }
+  });
+
+  var response = jsonResponse(true, { lojas: lojas, produtos: produtos });
+  cache.put('base_data', response.getContent(), 300); // 5 minutos
+  return response;
 }
 
 /**
@@ -341,12 +415,16 @@ function doGetProdutos() {
     var codigo = normalizeCodigo(row[0]);
     if (!codigo) return;
     
+    var ativo = String(row[4] || 'SIM').trim().toUpperCase();
+    if (ativo === 'NAO') ativo = 'NÃO';
+    if (ativo !== 'SIM' && ativo !== 'NÃO') ativo = 'SIM';
+
     produtos.push({
       codigo: codigo,
       descricao: String(row[1] || '').trim(),
       categoria: String(row[2] || '').trim(),
       unidade: String(row[3] || '').trim(),
-      ativo: String(row[4] || 'SIM').trim().toUpperCase(),
+      ativo: ativo,
       linha: idx + 2
     });
   });
@@ -401,16 +479,35 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action = (payload && payload.action) || 'registrar';
     
+    // A4: Idempotência
+    var cache = CacheService.getScriptCache();
+    var requestId = payload.request_id;
+    var cacheKey = requestId ? 'req_' + requestId : null;
+
+    if (cacheKey) {
+      var cached = cache.get(cacheKey);
+      if (cached) {
+        return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    var result;
     if (action === 'salvarProduto') {
-      return doPostSalvarProduto(payload);
+      result = doPostSalvarProduto(payload);
+    } else if (action === 'salvarProdutosLote') {
+      result = doPostSalvarProdutosLote(payload);
+    } else if (action === 'darBaixa') {
+      result = doPostDarBaixa(payload);
+    } else {
+      // Action padrão: registrar/somar lote
+      result = doPostRegistrar(payload);
     }
-    
-    if (action === 'darBaixa') {
-      return doPostDarBaixa(payload);
+
+    if (cacheKey) {
+      cache.put(cacheKey, result.getContent(), 600); // 10 minutos
     }
-    
-    // Action padrão: registrar/somar lote
-    return doPostRegistrar(payload);
+
+    return result;
     
   } catch (error) {
     return jsonResponse(false, error.message);
@@ -472,15 +569,16 @@ function doPostRegistrar(payload) {
     throw new Error('Não é permitido registrar vencimentos em meses passados.');
   }
 
-  // 5. Descrição: buscada no servidor (não confiada no cliente)
+  // 5. Descrição: buscada no servidor (A3: para no primeiro encontrado)
   var sheetProjetos = ss.getSheetByName('Projetos');
   var projetosRaw = getSheetData(sheetProjetos, 2);
   var descricao = 'Código não cadastrado';
-  projetosRaw.forEach(function(row) {
-    if (normalizeCodigo(row[0]) === codigo) {
-      descricao = String(row[1] || '').trim();
+  for (var i = 0; i < projetosRaw.length; i++) {
+    if (normalizeCodigo(projetosRaw[i][0]) === codigo) {
+      descricao = String(projetosRaw[i][1] || '').trim();
+      break; // A3: Para no primeiro encontrado
     }
-  });
+  }
 
   // 6. Lote (opcional, sanitizado e dentro do limite)
   var lote = sanitizeText(payload.lote || '');
@@ -516,6 +614,17 @@ function doPostRegistrar(payload) {
   var agora = formatDateTime(new Date(), 'yyyy-MM-dd HH:mm:ss');
   
   if (linhaExistente > 0) {
+    // A6: Se o cliente enviou confirmar_soma: false, bloqueia e avisa
+    if (payload.confirmar_soma === false) {
+      return jsonResponse(false, {
+        codigo: 'DUPLICADO',
+        mensagem: 'Já existe um registro ativo para este lote.',
+        existente: {
+          quantidade: qtdExistente
+        }
+      });
+    }
+
     // Soma quantidade ao registro existente
     var novaQtd = qtdExistente + qtd;
     sheet.getRange(linhaExistente, 5).setValue(novaQtd); // Coluna E: quantidade
@@ -531,7 +640,11 @@ function doPostRegistrar(payload) {
   
   var novoId = generateNextId(sheet);
   
-  sheet.appendRow([
+  // A5: Substitui appendRow por setValues com formatação de texto
+  var novaLinha = sheet.getLastRow() + 1;
+  var range = sheet.getRange(novaLinha, 1, 1, 10);
+  range.setNumberFormat('@');
+  range.setValues([[
     agora,           // A: data_registro
     loja,            // B: loja
     codigo,          // C: codigo_projeto
@@ -542,7 +655,7 @@ function doPostRegistrar(payload) {
     lote,            // H: lote
     'ATIVO',         // I: status
     ''               // J: atualizado_em (vazio pois é novo)
-  ]);
+  ]]);
 
   return jsonResponse(true, {
     somado: false,
@@ -577,7 +690,9 @@ function doPostSalvarProduto(payload) {
   var unidade = sanitizeText(payload.unidade || '');
   validateLength('Unidade', unidade, LIMITES.UNIDADE);
   
+  // A8: Normaliza ativo
   var ativo = String(payload.ativo || 'SIM').trim().toUpperCase();
+  if (ativo === 'NAO') ativo = 'NÃO';
   if (ativo !== 'SIM' && ativo !== 'NÃO') ativo = 'SIM';
 
   // Procura se já existe
@@ -593,23 +708,112 @@ function doPostSalvarProduto(payload) {
   
   if (linhaExistente > 0) {
     // Atualiza produto existente
-    sheet.getRange(linhaExistente, 2).setValue(descricao);
-    sheet.getRange(linhaExistente, 3).setValue(categoria);
-    sheet.getRange(linhaExistente, 4).setValue(unidade);
-    sheet.getRange(linhaExistente, 5).setValue(ativo);
+    var range = sheet.getRange(linhaExistente, 1, 1, 5);
+    range.setNumberFormat('@');
+    range.setValues([[codigo, descricao, categoria, unidade, ativo]]);
     
+    invalidarCacheBase();
     return jsonResponse(true, { mensagem: 'Produto atualizado com sucesso!' });
   }
   
   // Novo produto
-  sheet.appendRow([codigo, descricao, categoria, unidade, ativo]);
+  // A5: Substitui appendRow
+  var novaLinha = sheet.getLastRow() + 1;
+  var rangeNovo = sheet.getRange(novaLinha, 1, 1, 5);
+  rangeNovo.setNumberFormat('@');
+  rangeNovo.setValues([[codigo, descricao, categoria, unidade, ativo]]);
   
+  invalidarCacheBase();
   return jsonResponse(true, { mensagem: 'Produto cadastrado com sucesso!' });
 }
 
 /**
+ * POST aditivo P2: cria ou edita produtos em lote (otimizado)
+ */
+function doPostSalvarProdutosLote(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Projetos');
+  if (!sheet) throw new Error("Aba 'Projetos' não encontrada na planilha.");
+
+  var produtosParaSalvar = payload.produtos || [];
+  if (!Array.isArray(produtosParaSalvar)) {
+    throw new Error('Formato inválido de produtos.');
+  }
+
+  var projetosRaw = getSheetData(sheet, 5);
+  var mapaCodigos = {};
+  projetosRaw.forEach(function(row, idx) {
+    var codigo = normalizeCodigo(row[0]);
+    if (codigo && !mapaCodigos[codigo]) {
+      mapaCodigos[codigo] = idx + 2; // Linha na planilha
+    }
+  });
+
+  var resultados = [];
+  var atualizacoes = [];
+  var novos = [];
+  var novosMap = {}; // Para evitar duplicados no mesmo lote
+
+  produtosParaSalvar.forEach(function(prod, index) {
+    try {
+      var codigo = normalizeCodigo(prod.codigo);
+      if (!codigo || !/^\d{5}$/.test(codigo)) throw new Error('Código inválido.');
+      
+      var descricao = sanitizeText(prod.descricao || '');
+      if (!descricao) throw new Error('Descrição obrigatória.');
+      
+      var categoria = sanitizeText(prod.categoria || '');
+      var unidade = sanitizeText(prod.unidade || '');
+      
+      var ativo = String(prod.ativo || 'SIM').trim().toUpperCase();
+      if (ativo === 'NAO') ativo = 'NÃO';
+      if (ativo !== 'SIM' && ativo !== 'NÃO') ativo = 'SIM';
+
+      if (mapaCodigos[codigo] > 0) {
+        atualizacoes.push({
+          linha: mapaCodigos[codigo],
+          dados: [codigo, descricao, categoria, unidade, ativo]
+        });
+        resultados.push({ index: index, status: 'atualizado', codigo: codigo });
+      } else if (mapaCodigos[codigo] === -1) {
+        var idxNovo = novosMap[codigo];
+        novos[idxNovo] = [codigo, descricao, categoria, unidade, ativo];
+        resultados.push({ index: index, status: 'atualizado', codigo: codigo });
+      } else {
+        novosMap[codigo] = novos.length;
+        novos.push([codigo, descricao, categoria, unidade, ativo]);
+        mapaCodigos[codigo] = -1;
+        resultados.push({ index: index, status: 'criado', codigo: codigo });
+      }
+    } catch (err) {
+      resultados.push({ index: index, status: 'erro', mensagem: err.message });
+    }
+  });
+
+  // Aplica atualizações em bloco
+  if (atualizacoes.length > 0) {
+    atualizacoes.forEach(function(u) {
+      var range = sheet.getRange(u.linha, 1, 1, 5);
+      range.setNumberFormat('@');
+      range.setValues([u.dados]);
+    });
+  }
+
+  // Aplica novos em bloco
+  if (novos.length > 0) {
+    var novaLinha = sheet.getLastRow() + 1;
+    var rangeNovos = sheet.getRange(novaLinha, 1, novos.length, 5);
+    rangeNovos.setNumberFormat('@');
+    rangeNovos.setValues(novos);
+  }
+
+  invalidarCacheBase();
+
+  return jsonResponse(true, { resultados: resultados });
+}
+
+/**
  * POST aditivo: registra baixa total ou parcial.
- * Se a aba "Baixas" não existir, ela é criada automaticamente (defesa em profundidade).
  */
 function doPostDarBaixa(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -632,9 +836,14 @@ function doPostDarBaixa(payload) {
     throw new Error('A quantidade baixada deve ser um inteiro maior que zero.');
   }
 
+  // A8: Whitelist de motivo
   var motivo = sanitizeText(payload.motivo || '');
   if (!motivo) {
     throw new Error('O motivo da baixa é obrigatório.');
+  }
+  var motivosValidos = ['vendido', 'descartado', 'transferido', 'vencido'];
+  if (motivosValidos.indexOf(motivo.toLowerCase()) === -1) {
+    throw new Error('Motivo inválido. Use: vendido, descartado, transferido ou vencido.');
   }
   validateLength('Motivo', motivo, LIMITES.MOTIVO);
 
@@ -673,8 +882,11 @@ function doPostDarBaixa(payload) {
   sheetRegistros.getRange(linhaRegistro, 5).setValue(novaQtd); // Coluna E: quantidade
   sheetRegistros.getRange(linhaRegistro, 10).setValue(agora); // Coluna J: atualizado_em
   
-  // Registra baixa na aba "Baixas"
-  sheetBaixas.appendRow([
+  // Registra baixa na aba "Baixas" (A5: setValues em vez de appendRow)
+  var novaLinha = sheetBaixas.getLastRow() + 1;
+  var range = sheetBaixas.getRange(novaLinha, 1, 1, 7);
+  range.setNumberFormat('@');
+  range.setValues([[
     idRegistro,
     agora,
     String(registro[1] || '').trim(),
@@ -682,7 +894,7 @@ function doPostDarBaixa(payload) {
     qtdBaixada,
     motivo,
     responsavel
-  ]);
+  ]]);
   
   return jsonResponse(true, { 
     mensagem: 'Baixa registrada com sucesso. Quantidade restante: ' + novaQtd + '.' 
@@ -694,17 +906,12 @@ function doPostDarBaixa(payload) {
 // ============================================================
 
 /**
- * Migração idempotente:
+ * Migração idempotente (P3 otimizada):
  * - Formata colunas de código, mês e ID como texto ('@')
  * - Preenche IDs (R000001...) e status (ATIVO) onde vazios
  * - Normaliza códigos para 5 dígitos com zeros à esquerda
- * - Cria cabeçalhos novos SOMENTE onde vazios:
- *     Projetos: C categoria, D unidade, E ativo
- *     Registros: G id, H lote, I status, J atualizado_em
+ * - Cria cabeçalhos novos SOMENTE onde vazios
  * - Cria a aba "Baixas" com 7 cabeçalhos, se não existir
- *
- * ⚠️ ANTES DE RODAR: faça uma cópia da planilha (Arquivo > Fazer cópia)
- * Pode ser rodada mais de uma vez: nada é sobrescrito ou duplicado.
  */
 function migrarPlanilha() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -712,11 +919,9 @@ function migrarPlanilha() {
   // Formata colunas como texto (evita perda de zeros à esquerda)
   var sheetProjetos = ss.getSheetByName('Projetos');
   if (sheetProjetos) {
-    var lastRowP = sheetProjetos.getLastRow();
-    if (lastRowP > 0) {
-      sheetProjetos.getRange(1, 1, lastRowP, 1).setNumberFormat('@'); // Coluna A: código
-    }
-    // Cabeçalhos novos da evolução B (somente células vazias)
+    // A5: Formata a coluna inteira
+    sheetProjetos.getRange(1, 1, sheetProjetos.getMaxRows(), 1).setNumberFormat('@');
+    
     garantirCabecalhos(sheetProjetos, {
       3: 'categoria',
       4: 'unidade',
@@ -726,13 +931,11 @@ function migrarPlanilha() {
   
   var sheetRegistros = ss.getSheetByName('Registros');
   if (sheetRegistros) {
-    var lastRowR = sheetRegistros.getLastRow();
-    if (lastRowR > 0) {
-      sheetRegistros.getRange(1, 3, lastRowR, 1).setNumberFormat('@'); // Coluna C: código
-      sheetRegistros.getRange(1, 6, lastRowR, 1).setNumberFormat('@'); // Coluna F: mês
-      sheetRegistros.getRange(1, 7, lastRowR, 1).setNumberFormat('@'); // Coluna G: ID
-    }
-    // Cabeçalhos novos da evolução C (somente células vazias)
+    // A5: Formata colunas inteiras
+    sheetRegistros.getRange(1, 3, sheetRegistros.getMaxRows(), 1).setNumberFormat('@');
+    sheetRegistros.getRange(1, 6, sheetRegistros.getMaxRows(), 1).setNumberFormat('@');
+    sheetRegistros.getRange(1, 7, sheetRegistros.getMaxRows(), 1).setNumberFormat('@');
+    
     garantirCabecalhos(sheetRegistros, {
       7: 'id',
       8: 'lote',
@@ -740,10 +943,12 @@ function migrarPlanilha() {
       10: 'atualizado_em'
     });
     
-    // Preenche IDs e status vazios
+    var lastRowR = sheetRegistros.getLastRow();
     if (lastRowR > 1) {
+      // P3: Otimização de leitura/escrita em bloco
       var data = sheetRegistros.getRange(2, 1, lastRowR - 1, 10).getValues();
       var maxId = 0;
+      var changed = false;
       
       // Encontra o maior ID existente
       data.forEach(function(row) {
@@ -755,28 +960,33 @@ function migrarPlanilha() {
         }
       });
       
-      // Preenche IDs vazios e status vazios
+      // Preenche IDs vazios, status vazios e normaliza códigos na matriz em memória
       for (var i = 0; i < data.length; i++) {
         var row = data[i];
-        var linha = i + 2;
         
-        // Se ID vazio, gera próximo
         if (!row[6] || String(row[6]).trim() === '') {
           maxId++;
-          var novoId = 'R' + String(maxId).padStart(6, '0');
-          sheetRegistros.getRange(linha, 7).setValue(novoId);
+          data[i][6] = 'R' + String(maxId).padStart(6, '0');
+          changed = true;
         }
         
-        // Se status vazio, marca como ATIVO
         if (!row[8] || String(row[8]).trim() === '') {
-          sheetRegistros.getRange(linha, 9).setValue('ATIVO');
+          data[i][8] = 'ATIVO';
+          changed = true;
         }
         
-        // Normaliza código (garante 5 dígitos com zeros)
         var codigo = normalizeCodigo(row[2]);
         if (codigo && codigo !== String(row[2]).trim()) {
-          sheetRegistros.getRange(linha, 3).setValue(codigo);
+          data[i][2] = codigo;
+          changed = true;
         }
+      }
+      
+      // Grava em bloco de uma só vez
+      if (changed) {
+        var range = sheetRegistros.getRange(2, 1, lastRowR - 1, 10);
+        range.setNumberFormat('@');
+        range.setValues(data);
       }
     }
   }
