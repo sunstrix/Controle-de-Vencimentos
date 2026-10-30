@@ -31,13 +31,12 @@
 
     # Content-Security-Policy calibrada para o stack real do projeto:
     # - script-src: apenas o próprio site + SheetJS (cdn.sheetjs.com) + Chart.js (cdn.jsdelivr.net)
-    # - script-src-attr: libera SOMENTE handlers inline de atributo (onerror do fallback da logo),
-    #   sem liberar blocos <script> inline (proteção anti-XSS mantida)
+    # - script-src-attr: REMOVIDO (S1) - o onerror inline será movido para JS
     # - style-src 'unsafe-inline': necessário pelos style="display:none" do markup
     # - connect-src: Apps Script (script.google.com) + o domínio de redirect das
     #   respostas (googleusercontent.com), sem o qual todo fetch quebraria
     # - img-src data:: seta do select em style.css é um data: URI
-    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.sheetjs.com https://cdn.jsdelivr.net; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://script.google.com https://*.googleusercontent.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdn.sheetjs.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://script.google.com https://*.googleusercontent.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
 
 # ============================================================
 # Cache: logo e assets podem ter cache curto (muda raramente)
